@@ -24,7 +24,7 @@ import timeit
 class PostgresDBManager:
     def __init__(self, dbname, user, password, host="localhost", port="5432"):
         """
-        Initializes the PostgresDBConnector with database connection parameters.
+        Initializes PostgresDBManager with database connection parameters.
         """
         self.dbname = dbname
         self.user = user
@@ -44,29 +44,14 @@ class PostgresDBManager:
                 host=self.host,
                 port=self.port
             )
-            logging.info("..connection established successfully.")
+            logging.info("..Postgres connection established successfully.")
             return self.connection
         
         except OperationalError as e:
             logging.error(f"..error connecting to database: {e}")
             self.connection = None
-
-    def disconnect(self):
-        """Closes the connection to the PostgreSQL database."""
-        if self.connection:
-            try:
-                self.connection.close()
-                logging.info("..connection closed.")
-                
-            except DatabaseError as e:
-                logging.error(f"..error closing connection: {e}")
-                
-            finally:
-                self.connection = None
-                self.cursor = None
-        else:
-            logging.warning("..no active database connection to close.")
-
+            
+    
     def create_cursor(self):
         """Creates a cursor object for executing queries."""
         if self.connection:
@@ -79,10 +64,28 @@ class PostgresDBManager:
                 self.cursor = None
                 
         else:
-            logging.warning("..no active  connection.")
+            logging.warning("..no active connection.")
+
+    def disconnect(self):
+        """Closes the connection to the PostgreSQL database."""
+        if self.connection:
+            try:
+                self.connection.close()
+                logging.info("\nPostgres connection closed.")
+                
+            except DatabaseError as e:
+                logging.error(f"Error closing connection: {e}")
+                
+            finally:
+                self.connection = None
+                self.cursor = None
+        else:
+            logging.warning("..no active database connection to close.")
 
 
-def read_assets(conn):
+
+
+def read_assets(conn) -> pd.DataFrame:
     """
     Returns a dataframe containing assets point data 
     """
@@ -157,7 +160,7 @@ def read_assets(conn):
     return df
 
 
-def read_trails(conn):
+def read_trails(conn) -> gpd.GeoDataFrame:
     """
     Returns a geodataframe containing trails line data 
     """
@@ -170,31 +173,61 @@ def read_trails(conn):
     
     return gdf
 
-def process_assets (df, latcol, loncol):
+
+def process_assets (df, latcol, loncol) -> gpd.GeoDataFrame:
     """
-    Returns a gdf of Cleans-up and transforms Assets data
+    Returns a gdf of clean Assets data
     """
     # Filter asset categories
+    logging.info('..filtering Assets Categories')
     cats=[
-    'Grounds',
-    'Furniture and Amenities',
-    'Signs',
-    'Water Service',
-    'Transportation',
-    'Stormwater',
-    'Bridges',
-    'Structures',
-    'Trails',
-    'Buildings',
-    'Electrical Telcomm Service',
-    'Wastewater Service',
-    'Water Management',
-    'Fuel Storage',
-    'Tools']
+        'Grounds',
+        'Furniture and Amenities',
+        'Signs',
+        'Water Service',
+        'Transportation',
+        'Stormwater',
+        'Bridges',
+        'Structures',
+        'Trails',
+        'Buildings',
+        'Electrical Telcomm Service',
+        'Wastewater Service',
+        'Water Management',
+        'Fuel Storage',
+        'Tools'
+    ]
     
     df= df[df['asset_category'].isin(cats)]
-
-    # Keep only points within BC
+    
+    
+    logging.info('..cleaning-up Assets column names')
+    ast_cols= {
+        'assetid': 'Asset ID', 
+        'gisid': 'GIS ID', 
+        'park': 'Park',
+        'park_subarea': 'Park Subarea', 
+        'asset_category': 'Category - Classification', 
+        'asset_type': 'Segment - Sub Classification', 
+        'description': 'Description', 
+        'campsite_number': 'Campsite Number', 
+        'name': 'Name', 
+        'accessible': 'acs Is Asset Accessible',
+        'route_accessible': 'acs Is the Route to the Asset Accessible', 
+        'gis_latitude': 'GIS Latitude', 
+        'gis_longitude': 'GIS Longitude'
+            }
+    
+    df.rename(
+        columns= ast_cols, 
+        inplace= True
+    )
+    
+    logging.info('..cleaning-up missing/out-of-range coordinates')
+    # remove missing lat/longs
+    df = df.dropna(subset=[latcol, loncol])
+    
+    # keep only points within BC
     lat_min, lat_max = 47, 60
     lon_min, lon_max = -145, -113
 
@@ -203,13 +236,75 @@ def process_assets (df, latcol, loncol):
         (df[loncol] >= lon_min) & (df[loncol] <= lon_max)
     ]
     
+    logging.info('..converting the Assets dataset to geodataframe')
     gdf = gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df[loncol], df[latcol]),
         crs="EPSG:4326"
     )
     
+    # convert object cols to strings (objects not supported by fiona)
+    gdf = gdf.astype(
+        {col: 'str' for col in gdf.select_dtypes(include=['object']).columns}
+    )  
+    
+    logging.info(f'..the final Assets dataset has {gdf.shape[0]} rows and {gdf.shape[1]} columns')
+    
     return gdf
+
+
+def process_trails(gdf) -> gpd.GeoDataFrame:
+    """
+    Returns a gdf of clean trails data
+    """
+    logging.info('..cleaning-up Trails column names')
+    trl_cols= {
+        "assetid": "Asset ID", 
+        "gisid": "GIS ID",
+        "asset_category": "Category - Classification",
+        "asset_type": "Asset Type",
+        "park": "Park",
+        "park_subarea": "Park Subarea",
+        "trail_surface": "Trail Surface",
+        "length_m": "Length Meters",
+        "trail_name": "Trail Name",
+        "osmid": "OSM ID",
+        "description": "Description",
+        "verified_by": "Verified By",
+        "accessible": "Is Accessible",
+        "route_accessible": "Is Route Accessible",
+        "wkb_geometry": "geometry"
+            }
+    
+    gdf.rename(
+        columns= trl_cols, 
+        inplace= True
+    )
+    
+    #change cols order
+    gdf = gdf[trl_cols.values()]
+    
+    
+    # reproject trails gdf to wgs84
+    gdf = gdf.set_geometry("geometry")
+    
+    logging.info('..repojecting Trails coordinates')
+    gdf.to_crs(
+        crs= 4326,
+        inplace= True
+    )
+    
+    # convert object cols to strings (objects not supported by fiona)
+    gdf = gdf.astype(
+        {col: 'str' for col in gdf.select_dtypes(include=['object']).columns}
+    )
+    
+    logging.info(f'..the final Trails dataset has {gdf.shape[0]} rows and {gdf.shape[1]} columns')
+    
+    return gdf
+    
+
+
 
 if __name__ == "__main__":
     start_t = timeit.default_timer() #start time
@@ -232,11 +327,15 @@ if __name__ == "__main__":
         logging.info("\nReading Trails (line) data")
         gdf_trl= read_trails(conn)
         
-        logging.info("\nTransforming data")
+        logging.info("\nProcessing Assets data")
         #assets
-        latcol = 'gis_latitude'
-        loncol = 'gis_latitude'
+        latcol = 'GIS Latitude'
+        loncol = 'GIS Longitude'
         gdf_ast= process_assets (df_ast, latcol, loncol)
+        
+        logging.info("\nProcessing Trails data")
+        #trails
+        gdf_trl= process_trails(gdf_trl)
         
         
     except Exception as e:
