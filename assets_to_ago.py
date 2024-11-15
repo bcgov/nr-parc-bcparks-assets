@@ -1,5 +1,5 @@
 '''
-Publish BCparks Assets data to ArcGIS Online (AGO):
+This script Publishes BCparks Assets data to ArcGIS Online (AGO):
     - reads tables from CityWide Postgres db.
     - cleans and transforms data
     - publishes feature layers to AGO
@@ -73,6 +73,7 @@ class PostgresDBManager:
         else:
             logging.warning("..no active connection.")
 
+
     def disconnect(self):
         """Closes the connection to the PostgreSQL database."""
         if self.connection:
@@ -91,10 +92,120 @@ class PostgresDBManager:
 
 
 
+class AGOManager:
+    def __init__(self, host, username, password):
+        """
+        Initialize the AGOManager instance 
+        """
+        self.host = host
+        self.username = username
+        self.password = password
+        self.gis = None 
+    
+
+    def connect(self):
+        """
+        Establish a connection to AGO and store the GIS object.
+        """
+        self.gis = GIS(self.host, self.username, self.password, verify_cert=True)
+        if self.gis.users.me:
+            logging.info(f'..successfully connected to AGOL as {self.gis.users.me.username}')
+        else:
+            logging.error('..connection to AGOL failed.')
+            raise ConnectionError("Failed to connect to AGOL.")
+    
+
+    def _gdf_to_geojson(self, gdf):
+        """
+        Converts a GeoDataFrame to a GeoJSON-like dictionary.
+        """
+        features = []
+        for _, row in gdf.iterrows():
+            feature = {
+                "type": "Feature",
+                "properties": {},
+                "geometry": row['geometry'].__geo_interface__
+            }
+            for column, value in row.items():
+                if column != 'geometry':
+                    if isinstance(value, (datetime, pd.Timestamp)):
+                        feature['properties'][column] = value.isoformat() if not pd.isna(value) else ''
+                    else:
+                        feature['properties'][column] = value
+            features.append(feature)
+        
+        geojson_dict = {
+            "type": "FeatureCollection",
+            "features": features
+        }
+        return geojson_dict
+    
+    
+    def publish_feature_layer(self, gdf, title, geojson_name, item_desc, folder):
+        """
+        Publishes a GeoDataFrame to AGO as a Feature Layer, overwriting if it already exists.
+        """
+        if not self.gis:
+            raise RuntimeError("Not connected to AGOL. Please call connect() first.")
+
+        gdf = gdf.fillna('')
+        gdf = gdf.replace("None", "")
+        logging.info("..converting data to geojson.")
+        
+        geojson_dict = self._gdf_to_geojson(gdf)
+
+        try:
+            # Search for an existing GeoJSON item with the same title
+            existing_items = self.gis.content.search(
+                f"title:\"{title}\" AND owner:{self.gis.users.me.username}",
+                item_type="GeoJson"
+            )
+            existing_items = [item for item in existing_items if item.title == title]
+            
+            # Delete the existing GeoJSON item if found
+            for item in existing_items:
+                if item.type == 'GeoJson':
+                    item.delete(force=True)
+                    logging.info(f"..existing GeoJSON item '{item.title}' deleted.")
+
+            # Create a new GeoJSON item
+            geojson_item_properties = {
+                'title': title,
+                'type': 'GeoJson',
+                'tags': 'BCparks data',
+                'description': item_desc,
+                'fileName': f'{geojson_name}.geojson'
+            }
+            geojson_file = BytesIO(json.dumps(geojson_dict).encode('utf-8'))
+            new_geojson_item = self.gis.content.add(
+                item_properties=geojson_item_properties, data=geojson_file, folder=folder)
+
+            # Publish or overwrite the existing feature layer
+            new_geojson_item.publish(overwrite=True)
+            logging.info(f"..feature layer '{title}' published successfully.")
+
+        except Exception as e:
+            error_message = f"..error publishing/updating feature layer: {str(e)}"
+            logging.error(error_message)
+            raise RuntimeError(error_message)
+      
+            
+    def disconnect(self):
+        """
+        Disconnect from AGO by clearing the GIS connection.
+        """
+        if self.gis:
+            self.gis = None
+            logging.info(f"\nDisconnect from AGOL as {self.gis.users.me.username}")
+        else:
+            logging.warning("..no active AGOL connection to disconnect.")
+
+
+
 
 def read_assets(conn) -> pd.DataFrame:
     """
-    Returns a dataframe containing assets point data 
+    Read Postgres tables and Returns a dataframe containing assets point data 
     """
     # Fetch tables and schema names
     sqlTabs= """
@@ -314,95 +425,13 @@ def process_trails(gdf) -> gpd.GeoDataFrame:
     return gdf
 
 
-def connect_to_AGO (HOST: str, USERNAME: str, PASSWORD: str) -> GIS:
-    """ 
-    Return a connection to AGO
-    """     
-    gis = GIS(HOST, USERNAME, PASSWORD, verify_cert=True)
-
-    # Test if the connection is successful
-    if gis.users.me:
-        logging.info(f'..successfully connected to AGOL as {gis.users.me.username}')
-    else:
-        logging.error('..connection to AGOL failed.')
-    
-    return gis
-
-
-def publish_feature_layer(gis, gdf, title, geojson_name, item_desc, folder):
-    """
-    Publishes a gdf to AGO as Feature Layer, overwriting if it already exists.
-    """
-    #format null values
-    gdf = gdf.fillna('')
-    gdf = gdf.replace("None", "")
-
-    logging.info("..converting data to geojson.")
-    def gdf_to_geojson(gdf):
-            features = []
-            for _, row in gdf.iterrows():
-                feature = {
-                    "type": "Feature",
-                    "properties": {},
-                    "geometry": row['geometry'].__geo_interface__
-                }
-                for column, value in row.items():
-                    if column != 'geometry':
-                        if isinstance(value, (datetime, pd.Timestamp)):
-                            feature['properties'][column] = value.isoformat() if not pd.isna(value) else ''
-                        else:
-                            feature['properties'][column] = value
-                features.append(feature)
-            
-            geojson_dict = {
-                "type": "FeatureCollection",
-                "features": features
-            }
-            return geojson_dict
-
-    # Convert GeoDataFrame to GeoJSON
-    geojson_dict = gdf_to_geojson(gdf)
-
-    try:
-        #search for an existing GeoJSON
-        existing_items = gis.content.search(
-            f"title:\"{title}\" AND owner:{gis.users.me.username}",
-            item_type="GeoJson"
-        )
-        
-        existing_items = [item for item in existing_items if item.title == title]
-        
-        # if an existing GeoJSON is found, Delete it
-        for item in existing_items:
-            if item.type == 'GeoJson':
-                item.delete(force=True, permanent= True)
-                logging.info(f"..existing GeoJSON item '{item.title}' deleted.")
-
-        # Create a new GeoJSON item
-        geojson_item_properties = {
-            'title': title,
-            'type': 'GeoJson',
-            'tags': 'BCparks data',
-            'description': item_desc,
-            'fileName': f'{geojson_name}.geojson'
-        }
-        geojson_file = BytesIO(json.dumps(geojson_dict).encode('utf-8'))
-        new_geojson_item = gis.content.add(item_properties=geojson_item_properties, data=geojson_file, folder=folder)
-
-        # Overwrite the existing feature layer or create a new one if it doesn't exist
-        new_geojson_item.publish(overwrite=True)
-        logging.info(f"..feature layer '{title}' published successfully.")
-
-
-    except Exception as e:
-        error_message = f"..error publishing/updating feature layer: {str(e)}"
-        raise RuntimeError(error_message)
 
 
 if __name__ == "__main__":
     start_t = timeit.default_timer() #start time
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     
+    #read and process data from postgres
     try:
         logging.info("Connecting to CityWide database")
         pg= PostgresDBManager(
@@ -437,27 +466,35 @@ if __name__ == "__main__":
     finally: 
         pg.disconnect()
         
+    #publish data to AGO
+    try:
+        logging.info('\nLogging to AGO')
+        AGO_HOST = os.getenv('AGO_HOST')
+        AGO_USERNAME = os.getenv('AGO_USERNAME_ML') ###########change this###########
+        AGO_PASSWORD = os.getenv('AGO_PASSWORD_ML') ###########change this###########
+        ago = AGOManager(AGO_HOST, AGO_USERNAME, AGO_PASSWORD)
+        ago.connect()
+        
+        logging.info('\nPublishing the Assets dataset to AGO')
+        title= 'PARC_L1G_Park_Asset_Data_Feature_Layer_v2_tests'
+        folder= '2024_PARC'
+        geojson_name= 'bcparks_assets_v2'
+        item_desc= f'Point dataset - Park assets (updated on {datetime.today().strftime("%B %d, %Y")})'
+        ago.publish_feature_layer(gdf_ast, title, geojson_name, item_desc, folder)
     
-
-    logging.info('\nLogging to AGO')
-    AGO_HOST = os.getenv('AGO_HOST')
-    AGO_USERNAME = os.getenv('AGO_USERNAME_ML') ###########change this###########
-    AGO_PASSWORD = os.getenv('AGO_PASSWORD_ML') ###########change this###########
-    gis = connect_to_AGO(AGO_HOST, AGO_USERNAME, AGO_PASSWORD)
+        logging.info('\nPublishing the Trails dataset to AGO')
+        title= 'PARC_L1G_Park_Trail_Data_Feature_Layer_v2_tests'
+        folder= '2024_PARC'
+        geojson_name= 'bcparks_trails_v2'
+        item_desc= f'Line dataset - Park trails (updated on {datetime.today().strftime("%B %d, %Y")})'
+        ago.publish_feature_layer(gdf_trl, title, geojson_name, item_desc, folder)
     
-    logging.info('\nPublishing the Assets dataset to AGO')
-    title= 'PARC_L1G_Park_Asset_Data_Feature_Layer_v2_tests'
-    folder= '2024_PARC'
-    geojson_name= 'bcparks_assets_v2'
-    item_desc= f'Point dataset - Park assets (updated on {datetime.today().strftime("%B %d, %Y")})'
-    publish_feature_layer(gis, gdf_ast, title, geojson_name, item_desc, folder)
-
-    logging.info('\nPublishing the Trails dataset to AGO')
-    title= 'PARC_L1G_Park_Trail_Data_Feature_Layer_v2_tests'
-    folder= '2024_PARC'
-    geojson_name= 'bcparks_trails_v2'
-    item_desc= f'Line dataset - Park trails (updated on {datetime.today().strftime("%B %d, %Y")})'
-    publish_feature_layer(gis, gdf_trl, title, geojson_name, item_desc, folder)
+    except Exception as e:
+        raise Exception(f"Error occurred: {e}")  
+    
+    finally: 
+        ago.disconnect()
+        
     
     finish_t = timeit.default_timer() #finish time
     t_sec = round(finish_t-start_t)
