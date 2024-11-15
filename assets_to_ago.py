@@ -18,7 +18,6 @@ from psycopg2 import DatabaseError
 
 import pandas as pd
 import geopandas as gpd
-#from shapely import wkb
 
 from io import BytesIO
 from datetime import datetime
@@ -40,6 +39,7 @@ class PostgresDBManager:
         self.port = port
         self.connection = None
         self.cursor = None
+
 
     def connect(self):
         """Establishes a connection to the PostgreSQL database."""
@@ -102,7 +102,7 @@ class AGOManager:
         self.password = password
         self.gis = None 
     
-
+    
     def connect(self):
         """
         Establish a connection to AGO and store the GIS object.
@@ -199,7 +199,6 @@ class AGOManager:
             logging.info(f"\nDisconnect from AGOL as {self.gis.users.me.username}")
         else:
             logging.warning("..no active AGOL connection to disconnect.")
-
 
 
 
@@ -426,7 +425,6 @@ def process_trails(gdf) -> gpd.GeoDataFrame:
 
 
 
-
 if __name__ == "__main__":
     start_t = timeit.default_timer() #start time
     logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -470,8 +468,8 @@ if __name__ == "__main__":
     try:
         logging.info('\nLogging to AGO')
         AGO_HOST = os.getenv('AGO_HOST')
-        AGO_USERNAME = os.getenv('AGO_USERNAME_ML') ###########change this###########
-        AGO_PASSWORD = os.getenv('AGO_PASSWORD_ML') ###########change this###########
+        AGO_USERNAME = os.getenv('AGO_USERNAME_ML') 
+        AGO_PASSWORD = os.getenv('AGO_PASSWORD_ML')
         ago = AGOManager(AGO_HOST, AGO_USERNAME, AGO_PASSWORD)
         ago.connect()
         
