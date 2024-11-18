@@ -28,7 +28,7 @@ import timeit
 
 
 class PostgresDBManager:
-    def __init__(self, dbname, user, password, host="localhost", port="5432"):
+    def __init__(self, dbname, user, password, host, port):
         """
         Initializes PostgresDBManager with database connection parameters.
         """
@@ -196,9 +196,9 @@ class AGOManager:
         """
         if self.gis:
             self.gis = None
-            logging.info(f"\nDisconnect from AGOL as {self.gis.users.me.username}")
+            logging.info(f"\nDisconnected from AGOL")
         else:
-            logging.warning("..no active AGOL connection to disconnect.")
+            logging.warning("\nNo active AGOL connection to disconnect.")
 
 
 
