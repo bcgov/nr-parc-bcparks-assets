@@ -432,12 +432,18 @@ if __name__ == "__main__":
     #read and process data from postgres
     try:
         logging.info("Connecting to CityWide database")
+        PG_HOST_CW= os.getenv('PG_HOST_CW')
+        PG_PORT_CW= os.getenv('PG_PORT_CW')
+        PG_DATABASE_CW= os.getenv('PG_DATABASE_CW')
+        PG_USER_CW= os.getenv('PG_USER_CW')
+        PG_PASSWORD_CW= os.getenv('PG_PASSWORD_CW')
+
         pg= PostgresDBManager(
-            host= os.getenv('PG_HOST_CW'),
-            port= os.getenv('PG_PORT_CW'),
-            dbname= os.getenv('PG_DATABASE_CW'),
-            user= os.getenv('PG_USER_CW'),
-            password= os.getenv('PG_PASSWORD_CW')
+            dbname= PG_DATABASE_CW,
+            user= PG_USER_CW,
+            password= PG_PASSWORD_CW,
+            host= PG_HOST_CW,
+            port= PG_PORT_CW
         )
         conn= pg.connect()
         
