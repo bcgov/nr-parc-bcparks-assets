@@ -14,8 +14,8 @@ jobs:
       PG_USER_CW: ${{ secrets.PG_USER_CW}}
       PG_PASSWORD_CW: ${{ secrets.PG_PASSWORD_CW}}
       AGO_HOST: ${{ secrets.AGO_HOST}}
-      AGO_USERNAME_ML: ${{ secrets.AGO_USERNAME_ML}}
-      AGO_PASSWORD_ML: ${{ secrets.AGO_PASSWORD_ML}}
+      AGO_USERNAME_DSS: ${{ secrets.AGO_USERNAME_DSS}}
+      AGO_PASSWORD_DSS: ${{ secrets.AGO_PASSWORD_DSS}}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
