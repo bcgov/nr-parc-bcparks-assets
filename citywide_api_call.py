@@ -3,7 +3,7 @@ import json
 import requests
 
 
-base_url = os.getenv('CW_API_ENDPOINT')
+base_url = os.getenv('CW_API_URL')
 token= os.getenv('CW_API_TOKEN')
 endpoint = "assets" #list of assets
 
