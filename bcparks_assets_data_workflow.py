@@ -486,9 +486,6 @@ if __name__ == "__main__":
         AGO_HOST = os.getenv('AGO_HOST')
         AGO_USERNAME_ML = os.getenv('AGO_USERNAME_ML') 
         AGO_PASSWORD_ML = os.getenv('AGO_PASSWORD_ML')
-
-        print(AGO_HOST, AGO_USERNAME_ML, AGO_PASSWORD_ML)
-        
         ago = AGOManager(AGO_HOST, AGO_USERNAME_ML, AGO_PASSWORD_ML)
         ago.connect()
         
