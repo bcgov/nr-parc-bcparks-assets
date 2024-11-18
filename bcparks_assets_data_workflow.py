@@ -117,6 +117,7 @@ class AGOManager:
         """
         Establish a connection to AGO and store the GIS object.
         """
+        print(self.host, self.username, self.password)
         self.gis = GIS(self.host, self.username, self.password, verify_cert=True)
         if self.gis.users.me:
             logging.info(f'..successfully connected to AGOL as {self.gis.users.me.username}')
