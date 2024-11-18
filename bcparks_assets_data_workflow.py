@@ -484,28 +484,27 @@ if __name__ == "__main__":
     try:
         logging.info('\nLogging to AGO')
         AGO_HOST = os.getenv('AGO_HOST')
-        AGO_USERNAME_ML = os.getenv('AGO_USERNAME_ML') 
-        AGO_PASSWORD_ML = os.getenv('AGO_PASSWORD_ML')
-        ago = AGOManager(AGO_HOST, AGO_USERNAME_ML, AGO_PASSWORD_ML)
+        AGO_USERNAME_DSS = os.getenv('AGO_USERNAME_DSS') 
+        AGO_PASSWORD_DSS = os.getenv('AGO_PASSWORD_DSS')
+        ago = AGOManager(AGO_HOST, AGO_USERNAME_DSS, AGO_PASSWORD_DSS)
         ago.connect()
         
         logging.info('\nPublishing the Assets dataset to AGO')
         if gdf_ast.shape[0] > 0:
-            title= 'PARC_L1G_Park_Asset_Data_Feature_Layer_v2_tests'
-            folder= '2024_PARC'
+            title= 'PARC_L1G_Park_Asset_Data_Feature_Layer_v2'
+            folder= 'DSS Protected Areas Resource Catalogue (PARC) - Resource Analysis'
             geojson_name= 'bcparks_assets_v2'
-            item_desc= f'Point dataset - Park assets (updated on {datetime.today().strftime("%B %d, %Y")})'
+            item_desc= f'Point dataset - BCParks assets (updated on {datetime.today().strftime("%B %d, %Y")})'
             ago.publish_feature_layer(gdf_ast, title, geojson_name, item_desc, folder)
         else:
             logging.error('..Assets dataset is empty. AGO update aborted!')
 
-    
         logging.info('\nPublishing the Trails dataset to AGO')
         if gdf_trl.shape[0] > 0:
-            title= 'PARC_L1G_Park_Trail_Data_Feature_Layer_v2_tests'
-            folder= '2024_PARC'
+            title= 'PARC_L1G_Park_Trail_Data_Feature_Layer_v2'
+            folder= 'DSS Protected Areas Resource Catalogue (PARC) - Resource Analysis'
             geojson_name= 'bcparks_trails_v2'
-            item_desc= f'Line dataset - Park trails (updated on {datetime.today().strftime("%B %d, %Y")})'
+            item_desc= f'Line dataset - BCParks trails (updated on {datetime.today().strftime("%B %d, %Y")})'
             ago.publish_feature_layer(gdf_trl, title, geojson_name, item_desc, folder)
         else:
             logging.error('..Trails dataset is empty. AGO update aborted!')
