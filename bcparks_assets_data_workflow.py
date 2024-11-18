@@ -484,12 +484,12 @@ if __name__ == "__main__":
     try:
         logging.info('\nLogging to AGO')
         AGO_HOST = os.getenv('AGO_HOST')
-        AGO_USERNAME = os.getenv('AGO_USERNAME_ML') 
-        AGO_PASSWORD = os.getenv('AGO_PASSWORD_ML')
+        AGO_USERNAME_ML = os.getenv('AGO_USERNAME_ML') 
+        AGO_PASSWORD_ML = os.getenv('AGO_PASSWORD_ML')
 
-        print(AGO_HOST, AGO_USERNAME, AGO_PASSWORD)
+        print(AGO_HOST, AGO_USERNAME_ML, AGO_PASSWORD_ML)
         
-        ago = AGOManager(AGO_HOST, AGO_USERNAME, AGO_PASSWORD)
+        ago = AGOManager(AGO_HOST, AGO_USERNAME_ML, AGO_PASSWORD_ML)
         ago.connect()
         
         logging.info('\nPublishing the Assets dataset to AGO')
