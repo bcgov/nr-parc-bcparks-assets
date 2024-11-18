@@ -1,0 +1,35 @@
+name: Run Assets update every Thursday at 6am PST (2pm UTC)
+on:
+  schedule:
+    - cron: '0 14 * * 4' # Runs at 2 PM UTC every Thursday
+  workflow_dispatch:
+jobs:
+  run-scripts:
+    #if: github.repository == 'bcgov/nr-parc-bcparks-assets' # This ensures that only the ORIGINAL bcgov repo workflow is run (not the forks!)
+    runs-on: ubuntu-latest
+    env:
+      PG_HOST_CW: ${{ secrets.PG_HOST_CW}}
+      PG_PORT_CW: ${{ secrets.PG_PORT_CW}}
+      PG_DATABASE_CW: ${{ secrets.PG_DATABASE_CW}}
+      PG_USER_CW: ${{ secrets.PG_USER_CW}}
+      PG_PASSWORD_CW: ${{ secrets.PG_PASSWORD_CW}}
+      AGO_HOST: ${{ secrets.AGO_HOST}}
+      AGO_USERNAME: ${{ secrets.AGO_USERNAME_ML}}
+      AGO_PASSWORD: ${{ secrets.AGO_PASSWORD_ML}}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+    - name: Install libkrb5 for Kerberos on Linux
+      run: |
+        sudo apt install -y libkrb5-dev
+        pip install requests-kerberos
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Run Assets update
+      run: python bcparks_assets_data_workflow.py
