@@ -1,7 +1,7 @@
-name: Run Assets update every Thursday at 6am PST (2pm UTC)
+name: Run Assets update monthly on the first Thursday
 on:
   schedule:
-    - cron: '0 14 * * 4' # Runs at 2 PM UTC every Thursday
+    - cron: '0 14 * * 4#1' # Runs at 6am PST (2pm UTC) on the first Thursday of every month
   workflow_dispatch:
 jobs:
   run-scripts:
