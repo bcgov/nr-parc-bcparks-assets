@@ -12,7 +12,7 @@
 # Author:      Moez Labiadh - GeoBC
 #
 # Created:     2024-11-18
-# Updated:     
+# Updated:     2024-11-26
 #-------------------------------------------------------------------------------
 
 import warnings
@@ -321,8 +321,7 @@ def process_assets (df, latcol, loncol) -> gpd.GeoDataFrame:
         'Electrical Telcomm Service',
         'Wastewater Service',
         'Water Management',
-        'Fuel Storage',
-        'Tools'
+        'Fuel Storage'
     ]
     
     df= df[df['asset_category'].isin(cats)]
@@ -479,7 +478,7 @@ if __name__ == "__main__":
     
     finally: 
         pg.disconnect()
-        
+ 
     #publish data to AGO
     try:
         logging.info('\nLogging to AGO')
@@ -515,7 +514,6 @@ if __name__ == "__main__":
     finally: 
         ago.disconnect()
         
-    
     finish_t = timeit.default_timer() #finish time
     t_sec = round(finish_t-start_t)
     mins = int (t_sec/60)
