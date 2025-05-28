@@ -120,6 +120,10 @@ class AGOManager:
         self.gis = GIS(self.host, self.username, self.password, verify_cert=True)
         if self.gis.users.me:
             logging.info(f'..successfully connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
+            privileges = self.gis.users.me.privileges
+            print(f"\nBC Parks Account Privileges:")
+            for privilege in sorted(privileges):
+                print(f"  {privilege}")
         else:
             logging.error('..connection to AGOL failed.')
             raise ConnectionError("Failed to connect to AGOL.")
@@ -525,7 +529,7 @@ if __name__ == "__main__":
             logging.info(f'\nLogging into AGO ({acct["label"]} account)')
             ago = AGOManager(AGO_HOST, acct["username"], acct["password"])
             ago.connect()
-
+            '''
             # Assets - using pre-converted GeoJSON
             logging.info(f'\nPublishing Assets for {acct["label"]}')
             if geojson_assets:
@@ -554,7 +558,7 @@ if __name__ == "__main__":
 
         except Exception as e:
             raise Exception(f"Error publishing to {acct['label']} AGO account: {e}")
-
+        '''
         finally:
             ago.disconnect()
 
