@@ -12,7 +12,7 @@
 # Author:      Moez Labiadh - GeoBC
 #
 # Created:     2024-11-18
-# Updated:     2024-11-26
+# Updated:     2025-05-28
 #-------------------------------------------------------------------------------
 
 import warnings
@@ -441,11 +441,11 @@ if __name__ == "__main__":
     #read and process data from postgres
     try:
         logging.info("Connecting to CityWide database")
-        PG_HOST_CW= os.getenv('PG_HOST_CW')
-        PG_PORT_CW= os.getenv('PG_PORT_CW')
-        PG_DATABASE_CW= os.getenv('PG_DATABASE_CW')
-        PG_USER_CW= os.getenv('PG_USER_CW')
-        PG_PASSWORD_CW= os.getenv('PG_PASSWORD_CW')
+        PG_HOST_CW= os.getenv('PG_HOST_CW').rstrip()
+        PG_PORT_CW= os.getenv('PG_PORT_CW').rstrip()
+        PG_DATABASE_CW= os.getenv('PG_DATABASE_CW').rstrip()
+        PG_USER_CW= os.getenv('PG_USER_CW').rstrip()
+        PG_PASSWORD_CW= os.getenv('PG_PASSWORD_CW').rstrip()
 
         pg= PostgresDBManager(
             dbname= PG_DATABASE_CW,
@@ -479,40 +479,68 @@ if __name__ == "__main__":
     finally: 
         pg.disconnect()
  
-    #publish data to AGO
-    try:
-        logging.info('\nLogging to AGO')
-        AGO_HOST = os.getenv('AGO_HOST')
-        AGO_USERNAME_DSS = os.getenv('AGO_USERNAME_DSS') 
-        AGO_PASSWORD_DSS = os.getenv('AGO_PASSWORD_DSS')
-        ago = AGOManager(AGO_HOST, AGO_USERNAME_DSS, AGO_PASSWORD_DSS)
-        ago.connect()
-        
-        logging.info('\nPublishing the Assets dataset to AGO')
-        if gdf_ast.shape[0] > 0:
-            title= 'PARC_L1G_Park_Asset_Data_Feature_Layer_v2'
-            folder= 'DSS Protected Areas Resource Catalogue (PARC) - Resource Analysis'
-            geojson_name= 'bcparks_assets_v2'
-            item_desc= f'Point dataset - BCParks assets (updated on {datetime.today().strftime("%B %d, %Y")})'
-            ago.publish_feature_layer(gdf_ast, title, geojson_name, item_desc, folder)
-        else:
-            logging.error('..Assets dataset is empty. AGO update aborted!')
+   
+    #publish to multiple AGO accounts
 
-        logging.info('\nPublishing the Trails dataset to AGO')
-        if gdf_trl.shape[0] > 0:
-            title= 'PARC_L1G_Park_Trail_Data_Feature_Layer_v2'
-            folder= 'DSS Protected Areas Resource Catalogue (PARC) - Resource Analysis'
-            geojson_name= 'bcparks_trails_v2'
-            item_desc= f'Line dataset - BCParks trails (updated on {datetime.today().strftime("%B %d, %Y")})'
-            ago.publish_feature_layer(gdf_trl, title, geojson_name, item_desc, folder)
-        else:
-            logging.error('..Trails dataset is empty. AGO update aborted!')
-    
-    except Exception as e:
-        raise Exception(f"Error occurred: {e}")  
-    
-    finally: 
-        ago.disconnect()
+    AGO_HOST = os.getenv('AGO_HOST')
+
+    accounts = [
+        {
+            "username": os.getenv('AGO_USERNAME_DSS'),
+            "password": os.getenv('AGO_PASSWORD_DSS'),
+            "label": "DSS",
+            "folder": "DSS Protected Areas Resource Catalogue (PARC) - Resource Analysis",
+            "asset_title": "PARC_L1G_Park_Asset_Data_Feature_Layer_v2",
+            "trail_title": "PARC_L1G_Park_Trail_Data_Feature_Layer_v2"
+        },
+        {
+            "username": os.getenv('AGO_USERNAME_ML'),
+            "password": os.getenv('AGO_PASSWORD_ML'),
+            "label": "BC Parks",
+            "folder": "AMS Data",
+            "asset_title": "PARC_BCParks_Asset_Data",
+            "trail_title": "PARC_BCParks_Trail_Data"
+        }
+    ]
+
+    for acct in accounts:
+        try:
+            logging.info(f'\nLogging into AGO ({acct["label"]} account)')
+            ago = AGOManager(AGO_HOST, acct["username"], acct["password"])
+            ago.connect()
+
+            # Assets
+            logging.info(f'\nPublishing Assets for {acct["label"]}')
+            if gdf_ast.shape[0] > 0:
+                ago.publish_feature_layer(
+                    gdf_ast,
+                    title=acct["asset_title"],
+                    geojson_name='bcparks_assets_v2',
+                    item_desc=f'Point dataset - BCParks assets (updated on {datetime.today():%B %d, %Y})',
+                    folder=acct["folder"]
+                )
+            else:
+                logging.error('..Assets dataset is empty. Skipping.')
+
+            # Trails
+            logging.info(f'\nPublishing Trails for {acct["label"]}')
+            if gdf_trl.shape[0] > 0:
+                ago.publish_feature_layer(
+                    gdf_trl,
+                    title=acct["trail_title"],
+                    geojson_name='bcparks_trails_v2',
+                    item_desc=f'Line dataset - BCParks trails (updated on {datetime.today():%B %d, %Y})',
+                    folder=acct["folder"]
+                )
+            else:
+                logging.error('..Trails dataset is empty. Skipping.')
+
+        except Exception as e:
+            raise Exception(f"Error publishing to {acct['label']} AGO account: {e}")
+
+        finally:
+            ago.disconnect()
+
         
     finish_t = timeit.default_timer() #finish time
     t_sec = round(finish_t-start_t)
