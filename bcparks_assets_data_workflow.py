@@ -511,8 +511,8 @@ if __name__ == "__main__":
             "trail_title": "PARC_L1G_Park_Trail_Data_Feature_Layer_v2"
         },
         {
-            "username": os.getenv('AGO_USERNAME_ML'),
-            "password": os.getenv('AGO_PASSWORD_ML'),
+            "username": os.getenv('AGO_USERNAME_BP'),
+            "password": os.getenv('AGO_PASSWORD_BCPARKS'),
             "label": "BC Parks",
             "folder": "AMS Data",
             "asset_title": "PARC_BCParks_Assets_Data",
