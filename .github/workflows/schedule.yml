@@ -16,6 +16,8 @@ jobs:
       AGO_HOST: ${{ secrets.AGO_HOST}}
       AGO_USERNAME_DSS: ${{ secrets.AGO_USERNAME_DSS}}
       AGO_PASSWORD_DSS: ${{ secrets.AGO_PASSWORD_DSS}}
+      AGO_USERNAME_BP: ${{ secrets.AGO_USERNAME_BP}}
+      AGO_PASSWORD_BCPARKS: ${{ secrets.AGO_PASSWORD_BCPARKS}}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
