@@ -121,7 +121,7 @@ class AGOManager:
         if self.gis.users.me:
             logging.info(f'..successfully connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
             privileges = self.gis.users.me.privileges
-            print(f"\nBC Parks Account Privileges:")
+            print(f"\n{self.gis.users.me.username} Privileges:")
             for privilege in sorted(privileges):
                 print(f"  {privilege}")
         else:
