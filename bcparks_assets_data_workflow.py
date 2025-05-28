@@ -6,8 +6,8 @@
 #                (2) cleans and transforms data
 #                (3) publishes feature layers to AGO
 #              
-# Input(s):    (1) CityWide Postgres credentials.
-#              (2) AGO credentials.           
+# Input(s):      (1) CityWide Postgres credentials.
+#                (2) AGO credentials.           
 #
 # Author:      Moez Labiadh - GeoBC
 #
@@ -125,44 +125,12 @@ class AGOManager:
             raise ConnectionError("Failed to connect to AGOL.")
     
 
-    def _gdf_to_geojson(self, gdf):
+    def publish_feature_layer_from_geojson(self, geojson_dict, title, geojson_name, item_desc, folder):
         """
-        Converts a GeoDataFrame to a GeoJSON-like dictionary.
-        """
-        features = []
-        for _, row in gdf.iterrows():
-            feature = {
-                "type": "Feature",
-                "properties": {},
-                "geometry": row['geometry'].__geo_interface__
-            }
-            for column, value in row.items():
-                if column != 'geometry':
-                    if isinstance(value, (datetime, pd.Timestamp)):
-                        feature['properties'][column] = value.isoformat() if not pd.isna(value) else ''
-                    else:
-                        feature['properties'][column] = value
-            features.append(feature)
-        
-        geojson_dict = {
-            "type": "FeatureCollection",
-            "features": features
-        }
-        return geojson_dict
-    
-    
-    def publish_feature_layer(self, gdf, title, geojson_name, item_desc, folder):
-        """
-        Publishes a GeoDataFrame to AGO as a Feature Layer, overwriting if it already exists.
+        Publishes a GeoJSON dictionary to AGO as a Feature Layer, overwriting if it already exists.
         """
         if not self.gis:
             raise RuntimeError("Not connected to AGOL. Please call connect() first.")
-
-        gdf = gdf.fillna('')
-        gdf = gdf.replace("None", "")
-        logging.info("..converting data to geojson.")
-        
-        geojson_dict = self._gdf_to_geojson(gdf)
 
         try:
             # Search for an existing GeoJSON item with the same title
@@ -198,15 +166,16 @@ class AGOManager:
             error_message = f"..error publishing/updating feature layer: {str(e)}"
             logging.error(error_message)
             raise RuntimeError(error_message)
-      
+    
             
     def disconnect(self):
         """
         Disconnect from AGO by clearing the GIS connection.
         """
         if self.gis:
+            username = self.gis.users.me.username
             self.gis = None
-            logging.info(f"\nDisconnected from AGOL")
+            logging.info(f"\nDisconnected from {username} AGOL account.")
         else:
             logging.warning("\nNo active AGOL connection to disconnect.")
 
@@ -433,6 +402,37 @@ def process_trails(gdf) -> gpd.GeoDataFrame:
     return gdf
 
 
+def gdf_to_geojson(gdf):
+    """
+    Converts a GeoDataFrame to a GeoJSON-like dictionary.
+    Standalone function for pre-processing GeoDataFrames.
+    """
+    # Clean the GeoDataFrame
+    gdf = gdf.fillna('')
+    gdf = gdf.replace("None", "")
+    
+    features = []
+    for _, row in gdf.iterrows():
+        feature = {
+            "type": "Feature",
+            "properties": {},
+            "geometry": row['geometry'].__geo_interface__
+        }
+        for column, value in row.items():
+            if column != 'geometry':
+                if isinstance(value, (datetime, pd.Timestamp)):
+                    feature['properties'][column] = value.isoformat() if not pd.isna(value) else ''
+                else:
+                    feature['properties'][column] = value
+        features.append(feature)
+    
+    geojson_dict = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    return geojson_dict
+
+
 
 if __name__ == "__main__":
     start_t = timeit.default_timer() #start time
@@ -479,6 +479,23 @@ if __name__ == "__main__":
     finally: 
         pg.disconnect()
  
+    
+    # Pre-convert GeoDataFrames to GeoJSON
+    logging.info("\nPre-converting GeoDataFrames to GeoJSON format")
+    geojson_assets = None
+    geojson_trails = None
+    
+    if gdf_ast.shape[0] > 0:
+        logging.info("..converting Assets to GeoJSON")
+        geojson_assets = gdf_to_geojson(gdf_ast)
+    else:
+        logging.warning("..Assets dataset is empty")
+        
+    if gdf_trl.shape[0] > 0:
+        logging.info("..converting Trails to GeoJSON")
+        geojson_trails = gdf_to_geojson(gdf_trl)
+    else:
+        logging.warning("..Trails dataset is empty")
    
     #publish to multiple AGO accounts
 
@@ -498,8 +515,8 @@ if __name__ == "__main__":
             "password": os.getenv('AGO_PASSWORD_ML'),
             "label": "BC Parks",
             "folder": "AMS Data",
-            "asset_title": "PARC_BCParks_Asset_Data",
-            "trail_title": "PARC_BCParks_Trail_Data"
+            "asset_title": "PARC_BCParks_Assets_Data",
+            "trail_title": "PARC_BCParks_Trails_Data"
         }
     ]
 
@@ -509,11 +526,11 @@ if __name__ == "__main__":
             ago = AGOManager(AGO_HOST, acct["username"], acct["password"])
             ago.connect()
 
-            # Assets
+            # Assets - using pre-converted GeoJSON
             logging.info(f'\nPublishing Assets for {acct["label"]}')
-            if gdf_ast.shape[0] > 0:
-                ago.publish_feature_layer(
-                    gdf_ast,
+            if geojson_assets:
+                ago.publish_feature_layer_from_geojson(
+                    geojson_assets,
                     title=acct["asset_title"],
                     geojson_name='bcparks_assets_v2',
                     item_desc=f'Point dataset - BCParks assets (updated on {datetime.today():%B %d, %Y})',
@@ -522,11 +539,11 @@ if __name__ == "__main__":
             else:
                 logging.error('..Assets dataset is empty. Skipping.')
 
-            # Trails
+            # Trails - using pre-converted GeoJSON
             logging.info(f'\nPublishing Trails for {acct["label"]}')
-            if gdf_trl.shape[0] > 0:
-                ago.publish_feature_layer(
-                    gdf_trl,
+            if geojson_trails:
+                ago.publish_feature_layer_from_geojson(
+                    geojson_trails,
                     title=acct["trail_title"],
                     geojson_name='bcparks_trails_v2',
                     item_desc=f'Line dataset - BCParks trails (updated on {datetime.today():%B %d, %Y})',
