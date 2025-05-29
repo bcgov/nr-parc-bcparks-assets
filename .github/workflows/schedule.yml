@@ -34,4 +34,4 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     - name: Run Assets update
-      run: python bcparks_assets_data_workflow.py
+      run: python bcparks_assets_data_workflow_debug.py

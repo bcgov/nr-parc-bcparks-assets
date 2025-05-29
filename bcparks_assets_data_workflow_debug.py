@@ -120,10 +120,6 @@ class AGOManager:
         self.gis = GIS(self.host, self.username, self.password, verify_cert=True)
         if self.gis.users.me:
             logging.info(f'..successfully connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
-            privileges = self.gis.users.me.privileges
-            print(f"\n{self.gis.users.me.username} Privileges:")
-            for privilege in sorted(privileges):
-                print(f"  {privilege}")
         else:
             logging.error('..connection to AGOL failed.')
             raise ConnectionError("Failed to connect to AGOL.")
@@ -488,6 +484,9 @@ if __name__ == "__main__":
     logging.info("\nPre-converting GeoDataFrames to GeoJSON format")
     geojson_assets = None
     geojson_trails = None
+
+    gdf_ast = gdf_ast.head(5) ########### TEST REMOVE THIS LINE IN PRODUCTION ##############
+    gdf_trl = gdf_trl.head(5) ########### TEST REMOVE THIS LINE IN PRODUCTION ##############  
     
     if gdf_ast.shape[0] > 0:
         logging.info("..converting Assets to GeoJSON")
@@ -525,42 +524,62 @@ if __name__ == "__main__":
     ]
 
     for acct in accounts:
-        try:
-            logging.info(f'\nLogging into AGO ({acct["label"]} account)')
-            ago = AGOManager(AGO_HOST, acct["username"], acct["password"])
-            ago.connect()
-            '''
-            # Assets - using pre-converted GeoJSON
-            logging.info(f'\nPublishing Assets for {acct["label"]}')
-            if geojson_assets:
-                ago.publish_feature_layer_from_geojson(
-                    geojson_assets,
-                    title=acct["asset_title"],
-                    geojson_name='bcparks_assets_v2',
-                    item_desc=f'Point dataset - BCParks assets (updated on {datetime.today():%B %d, %Y})',
-                    folder=acct["folder"]
-                )
-            else:
-                logging.error('..Assets dataset is empty. Skipping.')
 
-            # Trails - using pre-converted GeoJSON
-            logging.info(f'\nPublishing Trails for {acct["label"]}')
-            if geojson_trails:
-                ago.publish_feature_layer_from_geojson(
-                    geojson_trails,
-                    title=acct["trail_title"],
-                    geojson_name='bcparks_trails_v2',
-                    item_desc=f'Line dataset - BCParks trails (updated on {datetime.today():%B %d, %Y})',
-                    folder=acct["folder"]
-                )
-            else:
-                logging.error('..Trails dataset is empty. Skipping.')
 
-        except Exception as e:
-            raise Exception(f"Error publishing to {acct['label']} AGO account: {e}")
-        '''
-        finally:
-            ago.disconnect()
+        if acct["label"] == "BC Parks": ########### TEST REMOVE THIS LINE IN PRODUCTION ############## 
+            try:
+                logging.info(f'\nLogging into AGO ({acct["label"]} account)')
+                ago = AGOManager(AGO_HOST, acct["username"], acct["password"])
+                ago.connect()
+
+
+                me = ago.gis.users.me    ########### TEST REMOVE THIS LINE IN PRODUCTION ############## 
+                for folder in me.folders:
+                    title = folder['title']
+                    fid   = folder['id']
+                    print(f"Folder: {title}")
+
+                    # check for AMS Data
+                    if title == 'AMS Data':
+                        items = me.items(folder=fid, max_items=500)
+                        print("  Items in 'AMS Data':")
+                        for itm in items:
+                            print(f"   • {itm.title} ({itm.type})") ########### TEST REMOVE THIS LINE IN PRODUCTION ############## 
+
+
+
+
+                # Assets - using pre-converted GeoJSON
+                logging.info(f'\nPublishing Assets for {acct["label"]}')
+                if geojson_assets:
+                    ago.publish_feature_layer_from_geojson(
+                        geojson_assets,
+                        title=acct["asset_title"],
+                        geojson_name='bcparks_assets_v2',
+                        item_desc=f'Point dataset - BCParks assets (updated on {datetime.today():%B %d, %Y})',
+                        folder=acct["folder"]
+                    )
+                else:
+                    logging.error('..Assets dataset is empty. Skipping.')
+
+                # Trails - using pre-converted GeoJSON
+                logging.info(f'\nPublishing Trails for {acct["label"]}')
+                if geojson_trails:
+                    ago.publish_feature_layer_from_geojson(
+                        geojson_trails,
+                        title=acct["trail_title"],
+                        geojson_name='bcparks_trails_v2',
+                        item_desc=f'Line dataset - BCParks trails (updated on {datetime.today():%B %d, %Y})',
+                        folder=acct["folder"]
+                    )
+                else:
+                    logging.error('..Trails dataset is empty. Skipping.')
+
+            except Exception as e:
+                raise Exception(f"Error publishing to {acct['label']} AGO account: {e}")
+
+            finally:
+                ago.disconnect()
 
         
     finish_t = timeit.default_timer() #finish time
