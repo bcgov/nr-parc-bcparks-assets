@@ -119,7 +119,10 @@ class AGOManager:
         """
         self.gis = GIS(self.host, self.username, self.password, verify_cert=True)
         if self.gis.users.me:
+
             logging.info(f'..connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
+
+            logging.info(f'..successfully connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
         else:
             logging.error('..connection to AGOL failed.')
             raise ConnectionError("Failed to connect to AGOL.")
