@@ -539,16 +539,16 @@ if __name__ == "__main__":
                     fid   = folder['id']
                     print(f"Folder: {title}")
 
-                    # check for AMS Data
+                    # when we hit AMS Data, list title, type, and owner of each item
                     if title == 'AMS Data':
                         items = me.items(folder=fid, max_items=500)
                         print("  Items in 'AMS Data':")
                         for itm in items:
-                            print(f"   • {itm.title} ({itm.type})") ########### TEST REMOVE THIS LINE IN PRODUCTION ############## 
+                            print(f"   • {itm.title} ({itm.type}) – Owner: {itm.owner}") ########### TEST REMOVE THIS LINE IN PRODUCTION ############## 
 
 
 
-
+                '''
                 # Assets - using pre-converted GeoJSON
                 logging.info(f'\nPublishing Assets for {acct["label"]}')
                 if geojson_assets:
@@ -572,9 +572,11 @@ if __name__ == "__main__":
                         item_desc=f'Line dataset - BCParks trails (updated on {datetime.today():%B %d, %Y})',
                         folder=acct["folder"]
                     )
+                
                 else:
                     logging.error('..Trails dataset is empty. Skipping.')
-
+                '''
+                
             except Exception as e:
                 raise Exception(f"Error publishing to {acct['label']} AGO account: {e}")
 
