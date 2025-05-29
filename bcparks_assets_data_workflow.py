@@ -119,11 +119,10 @@ class AGOManager:
         """
         self.gis = GIS(self.host, self.username, self.password, verify_cert=True)
         if self.gis.users.me:
+
+            logging.info(f'..connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
+
             logging.info(f'..successfully connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
-            privileges = self.gis.users.me.privileges
-            print(f"\n{self.gis.users.me.username} Privileges:")
-            for privilege in sorted(privileges):
-                print(f"  {privilege}")
         else:
             logging.error('..connection to AGOL failed.')
             raise ConnectionError("Failed to connect to AGOL.")
@@ -206,7 +205,7 @@ def read_assets(conn) -> pd.DataFrame:
     # Read tables
     assets_dict= {}
     for table_name in tab_names:
-        print (f'..reading table: {table_name}')
+        logging.info (f'..reading table: {table_name}')
         if table_name in ['trails', 'roads']: #centroids
             query= f"""
                 SELECT 
@@ -529,7 +528,7 @@ if __name__ == "__main__":
             logging.info(f'\nLogging into AGO ({acct["label"]} account)')
             ago = AGOManager(AGO_HOST, acct["username"], acct["password"])
             ago.connect()
-            '''
+
             # Assets - using pre-converted GeoJSON
             logging.info(f'\nPublishing Assets for {acct["label"]}')
             if geojson_assets:
@@ -558,7 +557,7 @@ if __name__ == "__main__":
 
         except Exception as e:
             raise Exception(f"Error publishing to {acct['label']} AGO account: {e}")
-        '''
+
         finally:
             ago.disconnect()
 
@@ -567,4 +566,4 @@ if __name__ == "__main__":
     t_sec = round(finish_t-start_t)
     mins = int (t_sec/60)
     secs = int (t_sec%60)
-    print('\nProcessing Completed in {} minutes and {} seconds'.format (mins,secs))
+    logging.info('\nProcessing Completed in {} minutes and {} seconds'.format (mins,secs))
