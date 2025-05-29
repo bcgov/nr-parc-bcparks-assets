@@ -525,7 +525,7 @@ if __name__ == "__main__":
             logging.info(f'\nLogging into AGO ({acct["label"]} account)')
             ago = AGOManager(AGO_HOST, acct["username"], acct["password"])
             ago.connect()
-
+            '''
             # Assets - using pre-converted GeoJSON
             logging.info(f'\nPublishing Assets for {acct["label"]}')
             if geojson_assets:
@@ -554,7 +554,7 @@ if __name__ == "__main__":
 
         except Exception as e:
             raise Exception(f"Error publishing to {acct['label']} AGO account: {e}")
-
+        '''
         finally:
             ago.disconnect()
 
