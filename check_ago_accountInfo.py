@@ -2,7 +2,7 @@ import os
 from arcgis.gis import GIS
 
 gis = GIS(
-    'https://governmentofbc.maps.arcgis.com', 
+    os.getenv('AGO_HOST'), 
     os.getenv('AGO_USERNAME_BP'), 
     os.getenv('AGO_PASSWORD_BCPARKS'), 
     verify_cert=False
