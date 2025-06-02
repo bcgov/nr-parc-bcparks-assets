@@ -398,13 +398,16 @@ if __name__ == "__main__":
         conn= pg.connect()
     
         logging.info ('\nReading BC boundary GeoJSON file...')
-        bc_geom_wkb = read_geojson(r"data\bc.geojson")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        geojson_path = os.path.join(script_dir, "..", "data", "bc.geojson")
+        geojson_path = os.path.normpath(geojson_path)
+        bc_geom_wkb = read_geojson(geojson_path)
 
         logging.info  ('\nEvaluating assets outside BC boundary...')
         df = evaluate_assets (bc_geom_wkb, conn)
 
     except Exception as e:
-        logging.error(f"Error connecting to database: {e}")
+        logging.error(f"{e}")
         exit(1)
     
     finally:
@@ -442,10 +445,6 @@ if __name__ == "__main__":
             cc_addrs=cc_addrs,
             content=content
         )
-
-        #today = datetime.now().strftime("%Y%m%d")
-        #output_path = rf"Q:\dss_workarea\mlabiadh\workspace\20241015_Park_assets_script\work\out_of_bc_{today}.html"
-        #html_report.save(output_path)
 
     else:
         logging.info("No assets found outside BC boundary.")
