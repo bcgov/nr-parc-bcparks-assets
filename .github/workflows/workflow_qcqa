@@ -1,0 +1,41 @@
+name: Run Assets QC/QA monthly
+
+on:
+  schedule:
+    - cron: '0 14 1 * *' # Runs at 7AM PST on the 1st day of every month
+  workflow_dispatch:
+
+jobs:
+  run-assets-report:
+    runs-on: ubuntu-latest
+    env:
+      PG_HOST_CW: ${{ secrets.PG_HOST_CW }}
+      PG_PORT_CW: ${{ secrets.PG_PORT_CW }}
+      PG_DATABASE_CW: ${{ secrets.PG_DATABASE_CW }}
+      PG_USER_CW: ${{ secrets.PG_USER_CW }}
+      PG_PASSWORD_CW: ${{ secrets.PG_PASSWORD_CW }}
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          # Install packages required for GeoPandas and Shapely
+          sudo apt-get install -y gdal-bin libgdal-dev libgeos-dev
+          python -m pip install --upgrade pip
+
+      - name: Install Python packages
+        run: |
+          pip install psycopg2-binary pandas geopandas shapely folium
+
+      - name: Run Assets Report Script
+        # Adjust the path below if your script lives elsewhere in the repo.
+        run: python qualityCheck_coords.py
