@@ -140,21 +140,23 @@ def evaluate_assets (bc_geom_wkb, conn) -> pd.DataFrame:
     for table in tab_names:
         logging.info (f"...processing table: {table}")
         query = f"""
-            SELECT
-            *,
-            ST_X(ST_Transform(wkb_geometry, 4326)) AS longitude,
-            ST_Y(ST_Transform(wkb_geometry, 4326)) AS latitude,
-            ST_Distance(
-                ST_Transform(wkb_geometry, 4326)::geography,
-                ST_SetSRID(%s::geometry, 4326)::geography
-            ) AS distance_meters
-            FROM
-            assets.{table}
-            WHERE
-            NOT ST_Intersects(
-                ST_Transform(wkb_geometry, 4326),
-                ST_SetSRID(%s::geometry, 4326)
-            );
+                SELECT
+                    *,
+                    ST_X(ST_Transform(wkb_geometry, 4326)) AS longitude,
+                    ST_Y(ST_Transform(wkb_geometry, 4326)) AS latitude,
+                    ST_Distance(
+                        ST_Transform(wkb_geometry, 4326)::geography,
+                        ST_SetSRID(%s::geometry, 4326)::geography
+                    ) AS distance_meters
+
+                FROM
+                    assets.{table}
+
+                WHERE
+                    NOT ST_Intersects(
+                        ST_Transform(wkb_geometry, 4326),
+                        ST_SetSRID(%s::geometry, 4326)
+                    );
         """
         # Execute query using the WKB geometry
         #cursor.execute(query, (psycopg2.Binary(bc_geom_wkb),))
@@ -259,36 +261,36 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
 
     # --- Floating legend in bottom-right ---
     legend_html = """
-    <div id="legend" style="
-        position: fixed;
-        bottom: 50px; right: 30px; z-index:1000;
-        background-color: rgba(255,255,255,0.9); 
-        padding: 10px;
-        border-radius: 5px; 
-        border: 1px solid grey;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        font-family: Arial, sans-serif;
-        font-size: 12px;
-    ">
-    <b style="font-size: 14px;">Legend</b><br/>
-    """
+            <div id="legend" style="
+                position: fixed;
+                bottom: 50px; right: 30px; z-index:1000;
+                background-color: rgba(255,255,255,0.9); 
+                padding: 10px;
+                border-radius: 5px; 
+                border: 1px solid grey;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+            ">
+            <b style="font-size: 14px;">Legend</b><br/>
+                """
     for cat, col in color_map.items():
         legend_html += f"""
-    <div style="
-        display: flex;
-        align-items: center;
-        margin: 5px 0;
-    ">
-        <div style="
-            width: 15px; 
-            height: 15px;
-            background-color: {col};
-            border: 1px solid #333;
-            margin-right: 8px;
-            border-radius: 50%;
-        "></div>
-        <span>{cat}</span>
-    </div>
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin: 5px 0;
+                ">
+                    <div style="
+                        width: 15px; 
+                        height: 15px;
+                        background-color: {col};
+                        border: 1px solid #333;
+                        margin-right: 8px;
+                        border-radius: 50%;
+                    "></div>
+                    <span>{cat}</span>
+                </div>
     """
     legend_html += "</div>"
 
@@ -297,12 +299,12 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
     # --- Scrollable table below map ---
     tbl = df.to_html(index=False, classes="table table-striped", border=0)
     scroll_div = f"""
-    <div style="
-        max-height:250px; overflow-y:auto;
-        width:95%; margin:10px auto;
-    ">
-        {tbl}
-    </div>
+        <div style="
+            max-height:250px; overflow-y:auto;
+            width:95%; margin:10px auto;
+        ">
+            {tbl}
+        </div>
     """
     report.html.add_child(Element(
         '<h2 style="text-align:center; font-size:30px;">'
@@ -398,10 +400,7 @@ if __name__ == "__main__":
         conn= pg.connect()
     
         logging.info ('\nReading BC boundary GeoJSON file...')
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        geojson_path = os.path.join(script_dir, "..", "data", "bc.geojson")
-        geojson_path = os.path.normpath(geojson_path)
-        bc_geom_wkb = read_geojson(geojson_path)
+        bc_geom_wkb = read_geojson("data/bc.geojson")
 
         logging.info  ('\nEvaluating assets outside BC boundary...')
         df = evaluate_assets (bc_geom_wkb, conn)
