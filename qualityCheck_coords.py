@@ -31,6 +31,9 @@ import folium
 from branca.element import Figure, Element
 from folium.features import DivIcon
 
+import smtplib
+from email.message import EmailMessage
+
 from datetime import datetime
 import logging
 import timeit
@@ -100,7 +103,7 @@ class PostgresDBManager:
             logging.warning("..no active database connection to close.")
 
 
-def read_geojson(geojson_path):
+def read_geojson(geojson_path) -> bytes:
     """
     Reads the BC boundary GeoJSON file and 
     returns a WKB in EPSG:4326
@@ -115,7 +118,7 @@ def read_geojson(geojson_path):
     return wkb_dumps(bc_geom)
 
 
-def evaluate_assets (bc_geom_wkb, conn):
+def evaluate_assets (bc_geom_wkb, conn) -> pd.DataFrame:
     """
     Returns a df of assets outside the BC boundary.
     """
@@ -135,7 +138,7 @@ def evaluate_assets (bc_geom_wkb, conn):
 
     results = {}
     for table in tab_names:
-        print(f"...processing table: {table}")
+        logging.info (f"...processing table: {table}")
         query = f"""
             SELECT
             *,
@@ -169,7 +172,7 @@ def evaluate_assets (bc_geom_wkb, conn):
     return df
 
 
-def build_html_report(bc_geom_wkb, df):
+def build_html_report(bc_geom_wkb, df) -> folium.Figure:
     """
     Builds an HTML report with a Folium map 
     and a scrollable table.
@@ -311,6 +314,64 @@ def build_html_report(bc_geom_wkb, df):
     return report
 
 
+def send_email_report(
+    html_report,
+    smtp_server,
+    smtp_user,
+    recipients_list,
+    cc_list,
+    subject,
+    from_addr,
+    to_addrs,
+    cc_addrs,
+    content
+) -> None:
+    """
+    Converts the Folium Figure into HTML bytes and sends it as an email attachment.
+
+    Parameters:
+    - html_report       : a Folium Figure object (the report to render)
+    - smtp_server       : SMTP server hostname (e.g., "smtp.example.com")
+    - smtp_user         : SMTP username (sender’s email address / login)
+    - recipients_list   : list of recipient email addresses (to go in “To”)
+    - cc_list           : list of CC email addresses
+    - subject           : the email subject line
+    - from_addr         : the “From:” header (usually same as smtp_user)
+    - to_addrs          : the “To:” header (string or comma‐separated list)
+    - cc_addrs          : the “Cc:” header (string or comma‐separated list)
+    - content           : plain‐text body of the email
+    """
+    # 1) Render the Folium Figure as HTML, then encode to bytes
+    html_str = html_report.render()
+    html_bytes = html_str.encode("utf-8")
+
+    # 2) Open SMTP connection
+    mailServer = smtplib.SMTP(smtp_server)
+    #mailServer.ehlo()
+    mailServer.starttls()
+    mailServer.ehlo()
+
+    # 3) Build the EmailMessage
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addrs
+    msg["Cc"] = cc_addrs
+    msg.set_content(content)
+
+    # 4) Attach the HTML report as an .html file
+    filename = f"Outside_BC_Assets_{datetime.now().strftime('%Y%m%d')}.html"
+    msg.add_attachment(
+        html_bytes,
+        maintype="text",
+        subtype="html",
+        filename=filename
+    )
+
+    # 5) Send and close
+    mailServer.send_message(msg)
+    mailServer.quit()
+    logging.info("...email with HTML report sent successfully.")
 
 
 
@@ -336,10 +397,10 @@ if __name__ == "__main__":
 
         conn= pg.connect()
     
-        print ('\nReading BC boundary GeoJSON file...')
+        logging.info ('\nReading BC boundary GeoJSON file...')
         bc_geom_wkb = read_geojson(r"data\bc.geojson")
 
-        print ('\nEvaluating assets outside BC boundary...')
+        logging.info  ('\nEvaluating assets outside BC boundary...')
         df = evaluate_assets (bc_geom_wkb, conn)
 
     except Exception as e:
@@ -351,12 +412,40 @@ if __name__ == "__main__":
 
 
     if df.shape[0] > 0:
-        print ('\nBuilding HTML report...')
+        logging.info  ('\nBuilding HTML report...')
         html_report = build_html_report(bc_geom_wkb, df)
 
-        today = datetime.now().strftime("%Y%m%d")
-        output_path = rf"Q:\dss_workarea\mlabiadh\workspace\20241015_Park_assets_script\work\out_of_bc_{today}.html"
-        html_report.save(output_path)
+        logging.info('\nSending email...')
+        # prepare email parameters
+        smtp_server    = os.getenv("SMTP_SERVER")
+        smtp_user      = "Moez.Labiadh@gov.bc.ca"
+        recipients_list = ["Moez.Labiadh@gov.bc.ca"]
+        cc_list         = ["labiadhmoez@gmail.com"]
+        subject   = "Outside-BC Asset Coordinates Map"
+        from_addr = smtp_user
+        to_addrs  = ", ".join(recipients_list)
+        cc_addrs  = ", ".join(cc_list)
+        content   = """
+                    Hello,\n\nPlease find attached the Outside-BC Asset Coordinates report.\n
+                    """
+
+        # send email with the HTML report
+        send_email_report(
+            html_report=html_report,
+            smtp_server=smtp_server,
+            smtp_user=smtp_user,
+            recipients_list=recipients_list,
+            cc_list=cc_list,
+            subject=subject,
+            from_addr=from_addr,
+            to_addrs=to_addrs,
+            cc_addrs=cc_addrs,
+            content=content
+        )
+
+        #today = datetime.now().strftime("%Y%m%d")
+        #output_path = rf"Q:\dss_workarea\mlabiadh\workspace\20241015_Park_assets_script\work\out_of_bc_{today}.html"
+        #html_report.save(output_path)
 
     else:
         logging.info("No assets found outside BC boundary.")
@@ -366,4 +455,4 @@ if __name__ == "__main__":
     finish_t = timeit.default_timer()
     t_sec = round(finish_t - start_t)
     mins, secs = divmod(t_sec, 60)
-    print(f'\nProcessing Completed in {mins} minutes and {secs} seconds')
+    logging.info (f'\nProcessing Completed in {mins} minutes and {secs} seconds')
