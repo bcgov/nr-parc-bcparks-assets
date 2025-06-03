@@ -147,7 +147,7 @@ def evaluate_assets (bc_geom_wkb, conn) -> pd.DataFrame:
                     ST_Distance(
                         ST_Transform(wkb_geometry, 4326)::geography,
                         ST_SetSRID(%s::geometry, 4326)::geography
-                    ) AS distance_meters
+                    ) / 1000.0 AS distance_km
 
                 FROM
                     assets.{table}
@@ -166,8 +166,8 @@ def evaluate_assets (bc_geom_wkb, conn) -> pd.DataFrame:
         
     # Combine results into a single DataFrame
     df = pd.concat(results.values(), ignore_index=True)
-    df = df[df['distance_meters'] > 50] # filter out very close points
-    df.sort_values(by='distance_meters', ascending=False, inplace=True)
+    df = df[df['distance_km'] > 0.05] # filter out very close points (less than 50 m)
+    df.sort_values(by='distance_km', ascending=False, inplace=True)
     df.drop(columns=['wkb_geometry', 'ogc_fid', 'campsite_number'], inplace=True)
     df = df.round(3)
 
@@ -417,6 +417,9 @@ if __name__ == "__main__":
         logging.info  ('\nBuilding HTML report...')
         html_report = build_html_report(bc_geom_wkb, df)
 
+        html_report.save("docs/out_of_bc.html")
+
+        '''
         logging.info('\nSending email...')
         # prepare email parameters
         smtp_server    = os.getenv("SMTP_SERVER")
@@ -431,6 +434,7 @@ if __name__ == "__main__":
                     Hello,\n\nPlease find attached the Outside-BC Asset Coordinates report.\n
                     """
 
+
         # send email with the HTML report
         send_email_report(
             html_report=html_report,
@@ -444,7 +448,7 @@ if __name__ == "__main__":
             cc_addrs=cc_addrs,
             content=content
         )
-
+        '''
     else:
         logging.info("No assets found outside BC boundary.")
         exit(1)
