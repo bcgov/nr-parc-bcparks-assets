@@ -176,12 +176,13 @@ def evaluate_assets (bc_geom_wkb, conn) -> pd.DataFrame:
 
 def build_html_report(bc_geom_wkb, df) -> folium.Figure:
     """
-    Builds an HTML report with a Folium map 
-    and a scrollable table.
+    Builds an HTML report with a Folium map, a scrollable table,
+    and makes each 'gisid' in the table clickable to zoom to its marker.
     """
     # --- Color by asset_category ---
     cats = df["asset_category"].unique()
-    palette = ["red","blue","purple","orange","pink","darkred","cadetblue","darkpink", "green"]
+    palette = ["red","blue","purple","orange","pink",
+               "darkred","cadetblue","darkpink", "green"]
     color_map = {cat: palette[i % len(palette)] for i, cat in enumerate(cats)}
 
     # --- Build Folium map with no default tiles ---
@@ -189,6 +190,8 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
         location=[50.897439, -121.868009],
         zoom_start=5,
     )
+    # Grab the JS variable name Leaflet assigned to this map
+    map_var = m.get_name()
 
     # --- Add Google Satellite basemap ---
     folium.TileLayer(
@@ -199,7 +202,7 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
         subdomains=['mt0','mt1','mt2','mt3']
     ).add_to(m)
 
-    # BC boundary outline
+    # --- Draw BC boundary outline ---
     geom = wkb_loads(bc_geom_wkb)
     folium.GeoJson(
         mapping(geom),
@@ -207,22 +210,31 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
         style_function=lambda f: {"color":"grey","weight":2,"fill":False}
     ).add_to(m)
 
-    # one FeatureGroup per category
+    # --- One FeatureGroup per category ---
     groups = {}
     for cat in cats:
         fg = folium.FeatureGroup(name=str(cat), show=True)
         groups[cat] = fg
         m.add_child(fg)
 
+    # Prepare a list to collect JavaScript lines for our coords object
+    js_coords_lines = []
+
+    # --- Add markers (with labels) and build coords JS mapping ---
     for _, row in df.iterrows():
         cat = row["asset_category"]
+        lat = row["latitude"]
+        lon = row["longitude"]
+        gid = row["gisid"]
+
+        # Build the popup HTML for each marker
         popup_html = "".join(
             f"<b>{col}</b>: {row[col]}<br/>" for col in df.columns
         )
 
-        # draw the circle marker
+        # Create the CircleMarker
         folium.CircleMarker(
-            [row["latitude"], row["longitude"]],
+            [lat, lon],
             radius=4,
             color=color_map[cat],
             fill=True,
@@ -230,9 +242,9 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
             popup=folium.Popup(popup_html, max_width=300)
         ).add_to(groups[cat])
 
-        # add the label using DivIcon
+        # Add the numeric label beside the marker
         folium.map.Marker(
-            [row["latitude"], row["longitude"]],
+            [lat, lon],
             icon=DivIcon(
                 icon_size=(150, 36),
                 icon_anchor=(0, 0),
@@ -246,72 +258,124 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
                             -1px  1px 0 white,
                             1px  1px 0 white;
                     ">
-                        {row["gisid"]}
+                        {gid}
                     </div>
                 '''
             )
         ).add_to(groups[cat])
 
-    # layer control now lets you switch between Google Satellite, OSM, and your overlays
+        # Add a line for the JS coords object:
+        #    coords["<gisid>"] = [<lat>, <lon>];
+        js_coords_lines.append(
+            f'coords["{gid}"] = [{lat}, {lon}];'
+        )
+
+    # --- Layer control ---
     folium.LayerControl(collapsed=False).add_to(m)
 
-    # --- Create Figure first ---
+    # --- Create Figure and add the map ---
     report = Figure(width="100%", height="100%")
     report.add_child(m)
 
     # --- Floating legend in bottom-right ---
     legend_html = """
-            <div id="legend" style="
-                position: fixed;
-                bottom: 50px; right: 30px; z-index:1000;
-                background-color: rgba(255,255,255,0.9); 
-                padding: 10px;
-                border-radius: 5px; 
-                border: 1px solid grey;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                font-family: Arial, sans-serif;
-                font-size: 12px;
-            ">
-            <b style="font-size: 14px;">Legend</b><br/>
-                """
+        <div id="legend" style="
+            position: fixed;
+            bottom: 50px; right: 30px; z-index:1000;
+            background-color: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid grey;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        ">
+        <b style="font-size: 14px;">Legend</b><br/>
+    """
     for cat, col in color_map.items():
         legend_html += f"""
+            <div style="
+                display: flex;
+                align-items: center;
+                margin: 5px 0;
+            ">
                 <div style="
-                    display: flex;
-                    align-items: center;
-                    margin: 5px 0;
-                ">
-                    <div style="
-                        width: 15px; 
-                        height: 15px;
-                        background-color: {col};
-                        border: 1px solid #333;
-                        margin-right: 8px;
-                        border-radius: 50%;
-                    "></div>
-                    <span>{cat}</span>
-                </div>
-    """
+                    width: 15px;
+                    height: 15px;
+                    background-color: {col};
+                    border: 1px solid #333;
+                    margin-right: 8px;
+                    border-radius: 50%;
+                "></div>
+                <span>{cat}</span>
+            </div>
+        """
     legend_html += "</div>"
-
     report.html.add_child(Element(legend_html))
 
-    # --- Scrollable table below map ---
-    tbl = df.to_html(index=False, classes="table table-striped", border=0)
+    # --- Prepare DataFrame for HTML table with clickable gisid ---
+    # Make a copy so we don't overwrite the original
+    df_for_table = df.copy()
+
+    # Replace each gisid with an anchor tag that calls zoomTo('<gisid>')
+    df_for_table["gisid"] = df_for_table["gisid"].apply(
+        lambda x: f'<a href="#" onclick="zoomTo(\'{x}\')" '
+                  f'style="color:blue; text-decoration:underline; cursor:pointer;">{x}</a>'
+    )
+
+    # Convert to HTML without escaping HTML entities (so our <a> renders)
+    tbl_html = df_for_table.to_html(
+        index=False,
+        classes="table table-striped",
+        border=0,
+        escape=False
+    )
     scroll_div = f"""
         <div style="
             max-height:250px; overflow-y:auto;
             width:95%; margin:10px auto;
         ">
-            {tbl}
+            {tbl_html}
         </div>
     """
+
+    # --- Add title and date subtitle ---
+    today = datetime.today().strftime("%B %d, %Y")
     report.html.add_child(Element(
-        '<h2 style="text-align:center; font-size:30px;">'
+        '<h2 style="text-align:center; font-size:25px; font-weight:bold;">'
         'Outside-BC Asset Coordinates'
         '</h2>'
     ))
+    report.html.add_child(Element(
+        f'<h4 style="text-align:center; font-size:15px; '
+        f'font-weight:bold; margin-top:-10px;">'
+        f'(as of {today})'
+        '</h4>'
+    ))
     report.html.add_child(Element(scroll_div))
+
+    # --- Inject JavaScript for coords mapping and zoomTo function ---
+    # Join all lines of coords into a single JS block
+    js_coords_block = "\n        ".join(js_coords_lines)
+
+    # Construct the <script> that builds coords and defines zoomTo()
+    js = f"""
+    <script>
+    // Build a simple lookup object: gisid -> [lat, lon]
+    var coords = {{}};
+        {js_coords_block}
+
+    // Function called when a table link is clicked.
+    // It uses Leaflet's setView to pan/zoom the map to those coords.
+    function zoomTo(gid) {{
+        var latlng = coords[gid];
+        if (latlng) {{
+            {map_var}.setView(latlng, 12);
+        }}
+    }}
+    </script>
+    """
+    report.html.add_child(Element(js))
 
     return report
 
