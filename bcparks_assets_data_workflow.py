@@ -301,13 +301,13 @@ def process_assets (df, latcol, loncol) -> gpd.GeoDataFrame:
         'gisid': 'GIS ID', 
         'park': 'Park',
         'park_subarea': 'Park Subarea', 
-        'asset_category': 'Category - Classification', 
-        'asset_type': 'Segment - Sub Classification', 
+        'asset_category': 'Category', 
+        'asset_type': 'Segment', 
         'description': 'Description', 
         'campsite_number': 'Campsite Number', 
         'name': 'Name', 
-        'accessible': 'acs Is Asset Accessible',
-        'route_accessible': 'acs Is the Route to the Asset Accessible', 
+        'accessible': 'Is Asset Accessible',
+        'route_accessible': 'Is the Route to the Asset Accessible', 
         'gis_latitude': 'GIS Latitude', 
         'gis_longitude': 'GIS Longitude'
             }
@@ -359,7 +359,7 @@ def process_trails(gdf) -> gpd.GeoDataFrame:
     trl_cols= {
         "assetid": "Asset ID", 
         "gisid": "GIS ID",
-        "asset_category": "Category - Classification",
+        "asset_category": "Category",
         "asset_type": "Asset Type",
         "park": "Park",
         "park_subarea": "Park Subarea",
@@ -402,7 +402,7 @@ def process_trails(gdf) -> gpd.GeoDataFrame:
     return gdf
 
 
-def gdf_to_geojson(gdf):
+def gdf_to_geojson(gdf) -> dict:
     """
     Converts a GeoDataFrame to a GeoJSON-like dictionary.
     Standalone function for pre-processing GeoDataFrames.
