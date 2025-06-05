@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-assets-report:
+  run-assets-qcqa:
+    if: github.repository == 'bcgov/nr-parc-bcparks-assets' # This ensures that only the ORIGINAL bcgov repo workflow is run (not the forks!)
     runs-on: ubuntu-latest
     env:
       PG_HOST_CW: ${{ secrets.PG_HOST_CW }}
