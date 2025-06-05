@@ -1,11 +1,11 @@
 #-------------------------------------------------------------------------------
 # Name:        BCParks Assets - Spatial Data Quality Check
 #
-# Purpose:     This script performs a spatial data quality check on BCParks assets:
+# Purpose:     This script performs spatial data quality checks on BCParks assets:
 #                (1) identifies assets outside the BC boundary
-#              
-# Input(s):      (1) CityWide Postgres credentials.          
-#
+#                (2) saves a html report of the identified assets
+#                (3) sends the report via email (not implemented yet - SMTP connection issues) 
+#                       
 # Author:      Moez Labiadh - GeoBC
 #
 # Created:     2025-06-05
@@ -16,10 +16,9 @@ import warnings
 warnings.simplefilter(action='ignore')
 
 import os
+import logging
 
-import psycopg2
-from psycopg2 import OperationalError 
-from psycopg2 import DatabaseError
+from db_manager import PostgresDBManager
 
 import pandas as pd
 import geopandas as gpd
@@ -35,72 +34,7 @@ import smtplib
 from email.message import EmailMessage
 
 from datetime import datetime
-import logging
 import timeit
-
-
-class PostgresDBManager:
-    def __init__(self, dbname, user, password, host, port):
-        """
-        Initializes PostgresDBManager with database connection parameters.
-        """
-        self.dbname = dbname
-        self.user = user
-        self.password = password
-        self.host = host
-        self.port = port
-        self.connection = None
-        self.cursor = None
-
-
-    def connect(self):
-        """Establishes a connection to the PostgreSQL database."""
-        try:
-            self.connection = psycopg2.connect(
-                dbname=self.dbname,
-                user=self.user,
-                password=self.password,
-                host=self.host,
-                port=self.port
-            )
-            logging.info("..Postgres connection established successfully.")
-            return self.connection
-        
-        except OperationalError as e:
-            logging.error(f"..error connecting to database: {e}")
-            self.connection = None
-            
-    
-    def create_cursor(self):
-        """Creates a cursor object for executing queries."""
-        if self.connection:
-            try:
-                self.cursor = self.connection.cursor()
-                logging.info("..cursor created successfully.")
-                
-            except DatabaseError as e:
-                logging.error(f"..error creating cursor: {e}")
-                self.cursor = None
-                
-        else:
-            logging.warning("..no active connection.")
-
-
-    def disconnect(self):
-        """Closes the connection to the PostgreSQL database."""
-        if self.connection:
-            try:
-                self.connection.close()
-                logging.info("\nPostgres connection closed.")
-                
-            except DatabaseError as e:
-                logging.error(f"Error closing connection: {e}")
-                
-            finally:
-                self.connection = None
-                self.cursor = None
-        else:
-            logging.warning("..no active database connection to close.")
 
 
 def read_geojson(geojson_path) -> bytes:
