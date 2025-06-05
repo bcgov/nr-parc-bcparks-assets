@@ -19,166 +19,16 @@ import warnings
 warnings.simplefilter(action='ignore')
 
 import os
-import json
 import logging
 
-import psycopg2
-from psycopg2 import OperationalError 
-from psycopg2 import DatabaseError
+from db_manager import PostgresDBManager
+from ago_manager import AGOManager
 
 import pandas as pd
 import geopandas as gpd
 
-from io import BytesIO
 from datetime import datetime
-from arcgis.gis import GIS
-
 import timeit
-
-
-
-class PostgresDBManager:
-    def __init__(self, dbname, user, password, host, port):
-        """
-        Initializes PostgresDBManager with database connection parameters.
-        """
-        self.dbname = dbname
-        self.user = user
-        self.password = password
-        self.host = host
-        self.port = port
-        self.connection = None
-        self.cursor = None
-
-
-    def connect(self):
-        """Establishes a connection to the PostgreSQL database."""
-        try:
-            self.connection = psycopg2.connect(
-                dbname=self.dbname,
-                user=self.user,
-                password=self.password,
-                host=self.host,
-                port=self.port
-            )
-            logging.info("..Postgres connection established successfully.")
-            return self.connection
-        
-        except OperationalError as e:
-            logging.error(f"..error connecting to database: {e}")
-            self.connection = None
-            
-    
-    def create_cursor(self):
-        """Creates a cursor object for executing queries."""
-        if self.connection:
-            try:
-                self.cursor = self.connection.cursor()
-                logging.info("..cursor created successfully.")
-                
-            except DatabaseError as e:
-                logging.error(f"..error creating cursor: {e}")
-                self.cursor = None
-                
-        else:
-            logging.warning("..no active connection.")
-
-
-    def disconnect(self):
-        """Closes the connection to the PostgreSQL database."""
-        if self.connection:
-            try:
-                self.connection.close()
-                logging.info("\nPostgres connection closed.")
-                
-            except DatabaseError as e:
-                logging.error(f"Error closing connection: {e}")
-                
-            finally:
-                self.connection = None
-                self.cursor = None
-        else:
-            logging.warning("..no active database connection to close.")
-
-
-
-class AGOManager:
-    def __init__(self, host, username, password):
-        """
-        Initialize the AGOManager instance 
-        """
-        self.host = host
-        self.username = username
-        self.password = password
-        self.gis = None 
-    
-    
-    def connect(self):
-        """
-        Establish a connection to AGO and store the GIS object.
-        """
-        self.gis = GIS(self.host, self.username, self.password, verify_cert=True)
-        if self.gis.users.me:
-            logging.info(f'..connected to AGOL as {self.gis.users.me.username}: {self.gis.users.me.userLicenseTypeId}')
-        else:
-            logging.error('..connection to AGOL failed.')
-            raise ConnectionError("Failed to connect to AGOL.")
-    
-
-    def publish_feature_layer_from_geojson(self, geojson_dict, title, geojson_name, item_desc, folder):
-        """
-        Publishes a GeoJSON dictionary to AGO as a Feature Layer, overwriting if it already exists.
-        """
-        if not self.gis:
-            raise RuntimeError("Not connected to AGOL. Please call connect() first.")
-
-        try:
-            # Search for an existing GeoJSON item with the same title
-            existing_items = self.gis.content.search(
-                f"title:\"{title}\" AND owner:{self.gis.users.me.username}",
-                item_type="GeoJson"
-            )
-            existing_items = [item for item in existing_items if item.title == title]
-            
-            # Delete the existing GeoJSON item if found
-            for item in existing_items:
-                if item.type == 'GeoJson':
-                    item.delete(force=True)
-                    logging.info(f"..existing GeoJSON item '{item.title}' deleted.")
-
-            # Create a new GeoJSON item
-            geojson_item_properties = {
-                'title': title,
-                'type': 'GeoJson',
-                'tags': 'BCparks data',
-                'description': item_desc,
-                'fileName': f'{geojson_name}.geojson'
-            }
-            geojson_file = BytesIO(json.dumps(geojson_dict).encode('utf-8'))
-            new_geojson_item = self.gis.content.add(
-                item_properties=geojson_item_properties, data=geojson_file, folder=folder)
-
-            # Publish or overwrite the existing feature layer
-            new_geojson_item.publish(overwrite=True)
-            logging.info(f"..feature layer '{title}' published successfully.")
-
-        except Exception as e:
-            error_message = f"..error publishing/updating feature layer: {str(e)}"
-            logging.error(error_message)
-            raise RuntimeError(error_message)
-    
-            
-    def disconnect(self):
-        """
-        Disconnect from AGO by clearing the GIS connection.
-        """
-        if self.gis:
-            username = self.gis.users.me.username
-            self.gis = None
-            logging.info(f"\nDisconnected from {username} AGOL account.")
-        else:
-            logging.warning("\nNo active AGOL connection to disconnect.")
-
 
 
 def read_assets(conn) -> pd.DataFrame:
@@ -301,13 +151,13 @@ def process_assets (df, latcol, loncol) -> gpd.GeoDataFrame:
         'gisid': 'GIS ID', 
         'park': 'Park',
         'park_subarea': 'Park Subarea', 
-        'asset_category': 'Category - Classification', 
-        'asset_type': 'Segment - Sub Classification', 
+        'asset_category': 'Category', 
+        'asset_type': 'Segment', 
         'description': 'Description', 
         'campsite_number': 'Campsite Number', 
         'name': 'Name', 
-        'accessible': 'acs Is Asset Accessible',
-        'route_accessible': 'acs Is the Route to the Asset Accessible', 
+        'accessible': 'Is Asset Accessible',
+        'route_accessible': 'Is the Route to the Asset Accessible', 
         'gis_latitude': 'GIS Latitude', 
         'gis_longitude': 'GIS Longitude'
             }
@@ -359,7 +209,7 @@ def process_trails(gdf) -> gpd.GeoDataFrame:
     trl_cols= {
         "assetid": "Asset ID", 
         "gisid": "GIS ID",
-        "asset_category": "Category - Classification",
+        "asset_category": "Category",
         "asset_type": "Asset Type",
         "park": "Park",
         "park_subarea": "Park Subarea",
@@ -402,7 +252,7 @@ def process_trails(gdf) -> gpd.GeoDataFrame:
     return gdf
 
 
-def gdf_to_geojson(gdf):
+def gdf_to_geojson(gdf) -> dict:
     """
     Converts a GeoDataFrame to a GeoJSON-like dictionary.
     Standalone function for pre-processing GeoDataFrames.
