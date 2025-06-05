@@ -423,9 +423,9 @@ if __name__ == "__main__":
         logging.info('\nSending email...')
         # prepare email parameters
         smtp_server    = os.getenv("SMTP_SERVER")
-        smtp_user      = "Moez.Labiadh@gov.bc.ca"
-        recipients_list = ["Moez.Labiadh@gov.bc.ca"]
-        cc_list         = ["labiadhmoez@gmail.com"]
+        smtp_user      = "XXX.XXX@gov.bc.ca"
+        recipients_list = []
+        cc_list         = []
         subject   = "Outside-BC Asset Coordinates Map"
         from_addr = smtp_user
         to_addrs  = ", ".join(recipients_list)
