@@ -5,7 +5,9 @@
 #                (1) identifies assets outside the BC boundary
 #                (2) saves a html report of the identified assets
 #                (3) sends the report via email (not implemented yet - SMTP connection issues) 
-#                       
+#  
+# Input(s):      (1) CityWide Postgres credentials.
+#                      
 # Author:      Moez Labiadh - GeoBC
 #
 # Created:     2025-06-05
