@@ -178,14 +178,17 @@ def build_html_report(bc_geom_wkb, df) -> Figure:
             f"<b>{col}</b>: {row[col]}<br/>" for col in df.columns
         )
 
-        # Create the CircleMarker
+        # Wrap the HTML in a Popup 
+        popup = folium.Popup(popup_html, max_width=300)
+
+        # Create the CircleMarker, assigning the Popup object
         folium.CircleMarker(
             [lat, lon],
             radius=4,
             color=color_map[cat],
             fill=True,
             fill_opacity=0.7,
-            popup=popup_html
+            popup=popup
         ).add_to(groups[cat])
 
         # Add the numeric label beside the marker
