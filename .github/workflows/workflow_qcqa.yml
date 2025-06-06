@@ -2,12 +2,12 @@ name: Run Assets QC/QA monthly
 
 on:
   schedule:
-    - cron: '0 14 1 * *' # Runs at 7AM PST on the 1st day of every month
+    - cron: '0 14 1 * *'  # Runs at 7AM PST on the 1st day of every month
   workflow_dispatch:
 
 jobs:
   run-assets-qcqa:
-    if: github.repository == 'bcgov/nr-parc-bcparks-assets' # This ensures that only the ORIGINAL bcgov repo workflow is run (not the forks!)
+    if: github.repository == 'bcgov/nr-parc-bcparks-assets'
     runs-on: ubuntu-latest
     env:
       PG_HOST_CW: ${{ secrets.PG_HOST_CW }}
@@ -39,3 +39,14 @@ jobs:
 
       - name: Run Assets QC/QA
         run: python qualityCheck_coords.py
+
+      - name: Commit generated report
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/out_of_bc.html
+          # Only commit if there are changes
+          if ! git diff --cached --quiet; then
+            git commit -m "Update out_of_bc.html from scheduled run"
+            git push
+          fi
