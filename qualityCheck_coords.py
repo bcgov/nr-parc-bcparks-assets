@@ -110,7 +110,7 @@ def evaluate_assets (bc_geom_wkb, conn) -> pd.DataFrame:
     return df
 
 
-def build_html_report(bc_geom_wkb, df) -> folium.Figure:
+def build_html_report(bc_geom_wkb, df) -> Figure:
     """
     Builds an HTML report with a Folium map, a scrollable table,
     and makes each 'gisid' in the table clickable to zoom to its marker.
@@ -121,21 +121,31 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
                "darkred","cadetblue","darkpink", "green"]
     color_map = {cat: palette[i % len(palette)] for i, cat in enumerate(cats)}
 
-    # --- Build Folium map with no default tiles ---
+    # --- Build Folium map with NO default tiles ---
     m = folium.Map(
         location=[50.897439, -121.868009],
         zoom_start=5,
+        tiles=None  # Prevent Folium from adding OpenStreetMap automatically
     )
     # Grab the JS variable name Leaflet assigned to this map
     map_var = m.get_name()
 
-    # --- Add Google Satellite basemap ---
+    # --- Add OpenStreetMap as the DEFAULT basemap ---
+    folium.TileLayer(
+        tiles="OpenStreetMap",
+        name="OpenStreetMap",
+        control=True,
+        show=True   # Make sure OSM is visible initially
+    ).add_to(m)
+
+    # --- Add Google Satellite but show=False so it does not appear first ---
     folium.TileLayer(
         tiles='http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
         attr='Google Satellite',
         name='Google Satellite',
         max_zoom=20,
-        subdomains=['mt0','mt1','mt2','mt3']
+        subdomains=['mt0','mt1','mt2','mt3'],
+        show=False  # Keep this layer in the control but not selected by default
     ).add_to(m)
 
     # --- Draw BC boundary outline ---
@@ -175,11 +185,11 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
             color=color_map[cat],
             fill=True,
             fill_opacity=0.7,
-            popup=folium.Popup(popup_html, max_width=300)
+            popup=popup_html
         ).add_to(groups[cat])
 
         # Add the numeric label beside the marker
-        folium.map.Marker(
+        folium.Marker(
             [lat, lon],
             icon=DivIcon(
                 icon_size=(150, 36),
@@ -250,16 +260,12 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
     report.html.add_child(Element(legend_html))
 
     # --- Prepare DataFrame for HTML table with clickable gisid ---
-    # Make a copy so we don't overwrite the original
     df_for_table = df.copy()
-
-    # Replace each gisid with an anchor tag that calls zoomTo('<gisid>')
     df_for_table["gisid"] = df_for_table["gisid"].apply(
         lambda x: f'<a href="#" onclick="zoomTo(\'{x}\')" '
                   f'style="color:blue; text-decoration:underline; cursor:pointer;">{x}</a>'
     )
 
-    # Convert to HTML without escaping HTML entities (so our <a> renders)
     tbl_html = df_for_table.to_html(
         index=False,
         classes="table table-striped",
@@ -291,10 +297,7 @@ def build_html_report(bc_geom_wkb, df) -> folium.Figure:
     report.html.add_child(Element(scroll_div))
 
     # --- Inject JavaScript for coords mapping and zoomTo function ---
-    # Join all lines of coords into a single JS block
     js_coords_block = "\n        ".join(js_coords_lines)
-
-    # Construct the <script> that builds coords and defines zoomTo()
     js = f"""
     <script>
     // Build a simple lookup object: gisid -> [lat, lon]
