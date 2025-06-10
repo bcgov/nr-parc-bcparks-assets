@@ -112,43 +112,53 @@ def evaluate_assets (bc_geom_wkb, conn) -> pd.DataFrame:
 
 def build_html_report(bc_geom_wkb, df) -> Figure:
     """
-    Builds an HTML report with a Folium map, a scrollable table,
-    and makes each 'gisid' in the table clickable to zoom to its marker.
+    Builds an HTML report with a Folium map 
+    and a scrollable table
     """
-    # --- Color by asset_category ---
+    today = datetime.today().strftime("%B %d, %Y")
+
+    # --- CASE: No out-of-BC assets detected ---
+    if df.empty:
+        report = Figure(width="100%", height="100%")
+        report.html.add_child(Element(
+            '<h2 style="text-align:center; font-size:25px; font-weight:bold;">'
+            'Outside-BC Asset Coordinates'
+            '</h2>'
+        ))
+        report.html.add_child(Element(
+            f'<p style="text-align:center; font-size:16px; margin-top:20px;">'
+            f'No out-of-BC coordinates detected (as of {today}).'
+            '</p>'
+        ))
+        return report
+
+    # --- Otherwise: build full report ---
+    # Color by asset_category
     cats = df["asset_category"].unique()
     palette = ["red","blue","purple","orange","pink",
-               "darkred","cadetblue","darkpink", "green"]
+               "darkred","cadetblue","darkpink","green"]
     color_map = {cat: palette[i % len(palette)] for i, cat in enumerate(cats)}
 
-    # --- Build Folium map with NO default tiles ---
+    # Create Folium map without default tiles
     m = folium.Map(
         location=[50.897439, -121.868009],
         zoom_start=5,
-        tiles=None  # Prevent Folium from adding OpenStreetMap automatically
+        tiles=None
     )
-    # Grab the JS variable name Leaflet assigned to this map
     map_var = m.get_name()
 
-    # --- Add OpenStreetMap as the DEFAULT basemap ---
-    folium.TileLayer(
-        tiles="OpenStreetMap",
-        name="OpenStreetMap",
-        control=True,
-        show=True   # Make sure OSM is visible initially
-    ).add_to(m)
-
-    # --- Add Google Satellite but show=False so it does not appear first ---
+    # Add basemaps
+    folium.TileLayer("OpenStreetMap", name="OpenStreetMap", show=True).add_to(m)
     folium.TileLayer(
         tiles='http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
         attr='Google Satellite',
         name='Google Satellite',
         max_zoom=20,
         subdomains=['mt0','mt1','mt2','mt3'],
-        show=False  # Keep this layer in the control but not selected by default
+        show=False
     ).add_to(m)
 
-    # --- Draw BC boundary outline ---
+    # Draw BC boundary
     geom = wkb_loads(bc_geom_wkb)
     folium.GeoJson(
         mapping(geom),
@@ -156,32 +166,24 @@ def build_html_report(bc_geom_wkb, df) -> Figure:
         style_function=lambda f: {"color":"grey","weight":2,"fill":False}
     ).add_to(m)
 
-    # --- One FeatureGroup per category ---
+    # FeatureGroup per category
     groups = {}
     for cat in cats:
         fg = folium.FeatureGroup(name=str(cat), show=True)
         groups[cat] = fg
         m.add_child(fg)
 
-    # Prepare a list to collect JavaScript lines for our coords object
-    js_coords_lines = []
-
-    # --- Add markers (with labels) and build coords JS mapping ---
+    # Collect JS lines for zoom-to
+    js_coords = []
     for _, row in df.iterrows():
         cat = row["asset_category"]
-        lat = row["latitude"]
-        lon = row["longitude"]
-        gid = row["gisid"]
+        lat, lon, gid = row["latitude"], row["longitude"], row["gisid"]
 
-        # Build the popup HTML for each marker
-        popup_html = "".join(
-            f"<b>{col}</b>: {row[col]}<br/>" for col in df.columns
-        )
-
-        # Wrap the HTML in a Popup 
+        # Popup HTML
+        popup_html = "".join(f"<b>{col}</b>: {row[col]}<br/>" for col in df.columns)
         popup = folium.Popup(popup_html, max_width=300)
 
-        # Create the CircleMarker, assigning the Popup object
+        # Add markers
         folium.CircleMarker(
             [lat, lon],
             radius=4,
@@ -191,13 +193,12 @@ def build_html_report(bc_geom_wkb, df) -> Figure:
             popup=popup
         ).add_to(groups[cat])
 
-        # Add the numeric label beside the marker
         folium.Marker(
             [lat, lon],
             icon=DivIcon(
                 icon_size=(150, 36),
                 icon_anchor=(0, 0),
-                html=f'''
+                html=f"""
                     <div style="
                         font-size: 12px;
                         color: black;
@@ -209,26 +210,21 @@ def build_html_report(bc_geom_wkb, df) -> Figure:
                     ">
                         {gid}
                     </div>
-                '''
+                """
             )
         ).add_to(groups[cat])
 
-        # Add a line for the JS coords object:
-        #    coords["<gisid>"] = [<lat>, <lon>];
-        js_coords_lines.append(
-            f'coords["{gid}"] = [{lat}, {lon}];'
-        )
+        js_coords.append(f'coords["{gid}"] = [{lat}, {lon}];')
 
-    # --- Layer control ---
     folium.LayerControl(collapsed=False).add_to(m)
 
-    # --- Create Figure and add the map ---
+    # Assemble report
     report = Figure(width="100%", height="100%")
     report.add_child(m)
 
-    # --- Floating legend in bottom-right ---
+    # Legend
     legend_html = """
-        <div id="legend" style="
+        <div style="
             position: fixed;
             bottom: 50px; right: 30px; z-index:1000;
             background-color: rgba(255,255,255,0.9);
@@ -243,18 +239,13 @@ def build_html_report(bc_geom_wkb, df) -> Figure:
     """
     for cat, col in color_map.items():
         legend_html += f"""
-            <div style="
-                display: flex;
-                align-items: center;
-                margin: 5px 0;
-            ">
+            <div style="display:flex; align-items:center; margin:5px 0;">
                 <div style="
-                    width: 15px;
-                    height: 15px;
-                    background-color: {col};
-                    border: 1px solid #333;
-                    margin-right: 8px;
-                    border-radius: 50%;
+                    width:15px; height:15px;
+                    background-color:{col};
+                    border:1px solid #333;
+                    margin-right:8px;
+                    border-radius:50%;
                 "></div>
                 <span>{cat}</span>
             </div>
@@ -262,53 +253,43 @@ def build_html_report(bc_geom_wkb, df) -> Figure:
     legend_html += "</div>"
     report.html.add_child(Element(legend_html))
 
-    # --- Prepare DataFrame for HTML table with clickable gisid ---
-    df_for_table = df.copy()
-    df_for_table["gisid"] = df_for_table["gisid"].apply(
+    # Table with clickable gisid
+    df_tbl = df.copy()
+    df_tbl["gisid"] = df_tbl["gisid"].apply(
         lambda x: f'<a href="#" onclick="zoomTo(\'{x}\')" '
-                  f'style="color:blue; text-decoration:underline; cursor:pointer;">{x}</a>'
+                  f'style="color:blue;text-decoration:underline;">{x}</a>'
     )
-
-    tbl_html = df_for_table.to_html(
+    tbl_html = df_tbl.to_html(
         index=False,
         classes="table table-striped",
         border=0,
         escape=False
     )
     scroll_div = f"""
-        <div style="
-            max-height:250px; overflow-y:auto;
-            width:95%; margin:10px auto;
-        ">
+        <div style="max-height:250px; overflow-y:auto; width:95%; margin:10px auto;">
             {tbl_html}
         </div>
     """
 
-    # --- Add title and date subtitle ---
-    today = datetime.today().strftime("%B %d, %Y")
+    # Title and date
     report.html.add_child(Element(
         '<h2 style="text-align:center; font-size:25px; font-weight:bold;">'
         'Outside-BC Asset Coordinates'
         '</h2>'
     ))
     report.html.add_child(Element(
-        f'<h4 style="text-align:center; font-size:15px; '
-        f'font-weight:bold; margin-top:-10px;">'
+        f'<h4 style="text-align:center; font-size:15px; margin-top:-10px;">'
         f'(as of {today})'
         '</h4>'
     ))
     report.html.add_child(Element(scroll_div))
 
-    # --- Inject JavaScript for coords mapping and zoomTo function ---
-    js_coords_block = "\n        ".join(js_coords_lines)
+    # Inject JS for zoom function
+    js_block = "\n        ".join(js_coords)
     js = f"""
     <script>
-    // Build a simple lookup object: gisid -> [lat, lon]
     var coords = {{}};
-        {js_coords_block}
-
-    // Function called when a table link is clicked.
-    // It uses Leaflet's setView to pan/zoom the map to those coords.
+        {js_block}
     function zoomTo(gid) {{
         var latlng = coords[gid];
         if (latlng) {{
@@ -418,46 +399,41 @@ if __name__ == "__main__":
     finally:
         pg.disconnect()
 
+    logging.info  ('\nBuilding HTML report...')
+    html_report = build_html_report(bc_geom_wkb, df)
+    html_report.save("docs/out_of_bc.html")
 
-    if df.shape[0] > 0:
-        logging.info  ('\nBuilding HTML report...')
-        html_report = build_html_report(bc_geom_wkb, df)
-
-        html_report.save("docs/out_of_bc.html")
-
-        '''
-        logging.info('\nSending email...')
-        # prepare email parameters
-        smtp_server    = os.getenv("SMTP_SERVER")
-        smtp_user      = "XXX.XXX@gov.bc.ca"
-        recipients_list = []
-        cc_list         = []
-        subject   = "Outside-BC Asset Coordinates Map"
-        from_addr = smtp_user
-        to_addrs  = ", ".join(recipients_list)
-        cc_addrs  = ", ".join(cc_list)
-        content   = """
-                    Hello,\n\nPlease find attached the Outside-BC Asset Coordinates report.\n
-                    """
+    '''
+    logging.info('\nSending email...')
+    # prepare email parameters
+    smtp_server    = os.getenv("SMTP_SERVER")
+    smtp_user      = "XXX.XXX@gov.bc.ca"
+    recipients_list = []
+    cc_list         = []
+    subject   = "Outside-BC Asset Coordinates Map"
+    from_addr = smtp_user
+    to_addrs  = ", ".join(recipients_list)
+    cc_addrs  = ", ".join(cc_list)
+    content   = """
+                Hello,\n\nPlease find attached the Outside-BC Asset Coordinates report.\n
+                """
 
 
-        # send email with the HTML report
-        send_email_report(
-            html_report=html_report,
-            smtp_server=smtp_server,
-            smtp_user=smtp_user,
-            recipients_list=recipients_list,
-            cc_list=cc_list,
-            subject=subject,
-            from_addr=from_addr,
-            to_addrs=to_addrs,
-            cc_addrs=cc_addrs,
-            content=content
-        )
-        '''
-    else:
-        logging.info("No assets found outside BC boundary.")
-        exit(1)
+    # send email with the HTML report
+    send_email_report(
+        html_report=html_report,
+        smtp_server=smtp_server,
+        smtp_user=smtp_user,
+        recipients_list=recipients_list,
+        cc_list=cc_list,
+        subject=subject,
+        from_addr=from_addr,
+        to_addrs=to_addrs,
+        cc_addrs=cc_addrs,
+        content=content
+    )
+    '''
+
 
 
     finish_t = timeit.default_timer()
